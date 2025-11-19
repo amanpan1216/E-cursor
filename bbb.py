@@ -308,17 +308,17 @@ REGEX_PATTERNS = {
     'client_token_nonce_alt': re.compile(r'(?:name="wc-braintree-credit-card-get-client-token-nonce"|id="wc-braintree-credit-card-get-client-token-nonce")(?:\s+type="hidden")?\s+value="([^"]+)"'),
     
     # Payment method nonce - multiple patterns
-    'payment_method_nonce': re.compile(r'(?:name="woocommerce-add-payment-method-nonce"|id="woocommerce-add-payment-method-nonce")(?:\s+type="hidden")?\s+value="([^"]+)"'),
+    'payment_method_nonce': re.compile(r'name=["\']?woocommerce-add-payment-method-nonce["\']?\s+(?:type=["\']hidden["\']?\s+)?value=["\']([^"\']+)["\']|value=["\']([^"\']+)["\']?\s+name=["\']?woocommerce-add-payment-method-nonce["\']?', re.IGNORECASE),
     
     # Braintree tokens
-    'data_token': re.compile(r'"data":"([^"]+)"'),
-    'auth_fingerprint': re.compile(r'"authorizationFingerprint":"([^"]+)"'),
-    'token': re.compile(r'"token":"([^"]+)"'),
-    'brand_code': re.compile(r'"brandCode":"([^"]+)"'),
+    'data_token': re.compile(r'"data"\s*:\s*"([^"]+)"'),
+    'auth_fingerprint': re.compile(r'"authorizationFingerprint"\s*:\s*"([^"]+)"'),
+    'token': re.compile(r'"token"\s*:\s*"([^"]+)"'),
+    'brand_code': re.compile(r'"brandCode"\s*:\s*"([^"]+)"'),
     
-    # Embedded client token - multiple patterns
-    'braintree_client_token': re.compile(r'var wc_braintree_client_token = \[?"?([^"\]]+)"?\]?'),
-    'braintree_client_token_alt': re.compile(r'wc_braintree_client_token\s*=\s*\[?"?([^"\]]+)"?\]?'),
+    # Embedded client token - multiple patterns (more flexible)
+    'braintree_client_token': re.compile(r'wc_braintree_client_token\s*[=:]\s*[\["\']?([A-Za-z0-9+/=]{50,})[\]"\']?', re.IGNORECASE),
+    'braintree_client_token_alt': re.compile(r'["\']?client_token["\']?\s*:\s*["\']([A-Za-z0-9+/=]{50,})["\']', re.IGNORECASE),
     
     # Response messages
     'message': re.compile(r'"message":\s*"([^"]+)"'),
@@ -435,7 +435,15 @@ def extract_with_regex(pattern_name: str, text: str) -> Optional[str]:
         logger.warning(f"Unknown regex pattern: {pattern_name}")
         return None
     match = pattern.search(text)
-    return match.group(1) if match else None
+    if not match:
+        return None
+    
+    # Try all groups (some patterns have multiple capture groups)
+    for i in range(1, len(match.groups()) + 1):
+        if match.group(i):
+            return match.group(i)
+    
+    return None
 
 def analyze_response_text(text: str) -> PaymentResult:
     """
@@ -1063,7 +1071,8 @@ async def get_braintree_authorization_token(session: aiohttp.ClientSession, url:
                                             apbct_fields: APBCTFields, 
                                             add_payment_text: str) -> str:
     """
-    Get Braintree authorization token with improved methods.
+    Get Braintree authorization token directly from embedded token in page.
+    NO AJAX - Direct extraction only.
     
     Args:
         session: aiohttp client session
@@ -1085,60 +1094,34 @@ async def get_braintree_authorization_token(session: aiohttp.ClientSession, url:
         if new_fields.ct_no_cookie:
             apbct_fields.ct_no_cookie = new_fields.ct_no_cookie
     
-    # Try embedded token on add-payment-method page first
+    # Extract embedded token directly from page (NO AJAX)
+    logger.debug("Extracting embedded Braintree token from page HTML")
     braintree_token = extract_with_regex('braintree_client_token', add_payment_text)
     if not braintree_token:
         braintree_token = extract_with_regex('braintree_client_token_alt', add_payment_text)
     
-    if braintree_token:
-        logger.debug("Using embedded Braintree token from add-payment-method page")
-        try:
-            decoded = base64.b64decode(braintree_token).decode("utf-8")
-            auth_fingerprint = extract_with_regex('auth_fingerprint', decoded)
-            if auth_fingerprint:
-                logger.info("Authorization fingerprint extracted from embedded token")
-                return auth_fingerprint
-        except Exception as e:
-            logger.debug(f"Failed to decode embedded token: {str(e)}")
+    if not braintree_token:
+        logger.error("No embedded Braintree client token found in page HTML")
+        raise TokenError("Braintree client token not found in page")
     
-    # Try AJAX method with add-payment-method page (OPTIONAL - only if embedded token not found)
-    cnonce = extract_with_regex('client_token_nonce', add_payment_text)
-    if not cnonce:
-        cnonce = extract_with_regex('client_token_nonce_alt', add_payment_text)
+    logger.debug(f"Found embedded token: {braintree_token[:50]}...")
     
-    if cnonce:
-        logger.debug("Attempting Braintree client token via AJAX (optional fallback)")
-        post_data_str = f"action=wc_braintree_credit_card_get_client_token&nonce={cnonce}"
+    # Decode the token to extract authorization fingerprint
+    try:
+        decoded = base64.b64decode(braintree_token).decode("utf-8")
+        logger.debug(f"Token decoded successfully: {len(decoded)} bytes")
         
-        page_url = f'https://{url}/my-account/add-payment-method/'
-        ajax_headers = get_headers(url, page_url, is_post=True)
-        ajax_headers['content-type'] = 'application/x-www-form-urlencoded; charset=UTF-8'
-        ajax_headers['x-requested-with'] = 'XMLHttpRequest'
-        ajax_headers['accept'] = '*/*'
+        auth_fingerprint = extract_with_regex('auth_fingerprint', decoded)
+        if not auth_fingerprint:
+            logger.error("Authorization fingerprint not found in decoded token")
+            raise TokenError("No authorizationFingerprint in Braintree token")
         
-        ajax_url = f'https://{url}/wp-admin/admin-ajax.php'
+        logger.info(f"Authorization fingerprint extracted: {auth_fingerprint[:50]}...")
+        return auth_fingerprint
         
-        try:
-            ajax_text = await post_data_with_retry(session, ajax_url, post_data_str, ajax_headers)
-            
-            data_token = extract_with_regex('data_token', ajax_text)
-            if data_token:
-                decoded = base64.b64decode(data_token).decode("utf-8")
-                auth_fingerprint = extract_with_regex('auth_fingerprint', decoded)
-                if auth_fingerprint:
-                    logger.info("Authorization fingerprint extracted from AJAX token")
-                    return auth_fingerprint
-                else:
-                    logger.debug("AJAX returned data but no auth_fingerprint found")
-            else:
-                logger.debug("AJAX succeeded but no token in response")
-        except Exception as e:
-            # AJAX is optional - just log and continue
-            logger.debug(f"AJAX method failed (non-critical): {str(e)}")
-    else:
-        logger.debug("No client_token_nonce found for AJAX method")
-    
-    raise TokenError("No Braintree client token method found - tried embedded token and AJAX")
+    except Exception as e:
+        logger.error(f"Failed to decode embedded token: {str(e)}")
+        raise TokenError(f"Token decode failed: {str(e)}")
 
 async def tokenize_card_with_braintree(session: aiohttp.ClientSession, 
                                        card: CardDetails,
