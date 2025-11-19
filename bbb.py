@@ -1101,13 +1101,13 @@ async def get_braintree_authorization_token(session: aiohttp.ClientSession, url:
         except Exception as e:
             logger.debug(f"Failed to decode embedded token: {str(e)}")
     
-    # Try AJAX method with add-payment-method page
+    # Try AJAX method with add-payment-method page (OPTIONAL - only if embedded token not found)
     cnonce = extract_with_regex('client_token_nonce', add_payment_text)
     if not cnonce:
         cnonce = extract_with_regex('client_token_nonce_alt', add_payment_text)
     
     if cnonce:
-        logger.debug("Getting Braintree client token via AJAX")
+        logger.debug("Attempting Braintree client token via AJAX (optional fallback)")
         post_data_str = f"action=wc_braintree_credit_card_get_client_token&nonce={cnonce}"
         
         page_url = f'https://{url}/my-account/add-payment-method/'
@@ -1128,11 +1128,17 @@ async def get_braintree_authorization_token(session: aiohttp.ClientSession, url:
                 if auth_fingerprint:
                     logger.info("Authorization fingerprint extracted from AJAX token")
                     return auth_fingerprint
+                else:
+                    logger.debug("AJAX returned data but no auth_fingerprint found")
+            else:
+                logger.debug("AJAX succeeded but no token in response")
         except Exception as e:
-            logger.warning(f"AJAX method failed: {str(e)}")
-            raise TokenError(f"AJAX method failed: {str(e)}")
+            # AJAX is optional - just log and continue
+            logger.debug(f"AJAX method failed (non-critical): {str(e)}")
+    else:
+        logger.debug("No client_token_nonce found for AJAX method")
     
-    raise TokenError("No Braintree client token method found")
+    raise TokenError("No Braintree client token method found - tried embedded token and AJAX")
 
 async def tokenize_card_with_braintree(session: aiohttp.ClientSession, 
                                        card: CardDetails,
