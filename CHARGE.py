@@ -186,18 +186,23 @@ async def find_products(session: aiohttp.ClientSession, url: str) -> List[Produc
             f'https://{url}/shop/',
             f'https://{url}/products/',
             f'https://{url}/store/',
+            f'https://{url}/',  # Homepage might have products
         ]
         
         page = None
         for shop_url in shop_urls:
             try:
+                logger.info(f"  Trying: {shop_url}")
                 page = await fetch(session, shop_url, HEADERS)
-                if 'product' in page.lower():
+                if 'product' in page.lower() or 'add-to-cart' in page.lower():
+                    logger.info(f"  ✓ Found products page")
                     break
-            except:
+            except Exception as e:
+                logger.debug(f"  Failed: {e}")
                 continue
         
         if not page:
+            logger.warning("  No shop pages accessible")
             return []
         
         # Extract product links
