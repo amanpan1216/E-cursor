@@ -303,9 +303,10 @@ REGEX_PATTERNS = {
     # Billing nonce - multiple patterns
     'billing_nonce': re.compile(r'(?:name="woocommerce-edit-address-nonce"|id="woocommerce-edit-address-nonce")(?:\s+type="hidden")?\s+value="([^"]+)"'),
     
-    # Client token nonce - multiple patterns
-    'client_token_nonce': re.compile(r'"client_token_nonce":"([^"]+)"'),
-    'client_token_nonce_alt': re.compile(r'(?:name="wc-braintree-credit-card-get-client-token-nonce"|id="wc-braintree-credit-card-get-client-token-nonce")(?:\s+type="hidden")?\s+value="([^"]+)"'),
+    # Client token nonce - multiple patterns (for AJAX calls)
+    'client_token_nonce': re.compile(r'"client_token_nonce"\s*:\s*"([^"]+)"', re.IGNORECASE),
+    'client_token_nonce_alt': re.compile(r'(?:name=["\']wc-braintree-credit-card-get-client-token-nonce["\']|id=["\']wc-braintree-credit-card-get-client-token-nonce["\'])(?:\s+type=["\']hidden["\'])?\s+value=["\']([^"\']+)["\']', re.IGNORECASE),
+    'client_token_nonce_json': re.compile(r'client_token_nonce["\']?\s*:\s*["\']([^"\']+)["\']', re.IGNORECASE),
     
     # Payment method nonce - multiple patterns
     'payment_method_nonce': re.compile(r'name=["\']?woocommerce-add-payment-method-nonce["\']?\s+(?:type=["\']hidden["\']?\s+)?value=["\']([^"\']+)["\']|value=["\']([^"\']+)["\']?\s+name=["\']?woocommerce-add-payment-method-nonce["\']?', re.IGNORECASE),
@@ -1054,16 +1055,37 @@ async def get_payment_method_nonce(session: aiohttp.ClientSession, url: str) -> 
         logger.warning("Site uses NMI Gateway, not Braintree - skipping")
         raise TokenError("Site uses NMI Gateway payment method, not Braintree")
     
+    # Try multiple methods to extract payment nonce
     wnonce = extract_with_regex('payment_method_nonce', text)
+    
     if not wnonce:
-        logger.error("Payment method nonce not found")
-        # Try to debug - check what payment methods are available
+        # Try alternative pattern - look in JSON data
+        import re
+        alt_pattern = re.compile(r'"woocommerce-add-payment-method-nonce"\s*:\s*"([^"]+)"', re.IGNORECASE)
+        match = alt_pattern.search(text)
+        if match:
+            wnonce = match.group(1)
+            logger.debug("Payment nonce found via JSON pattern")
+    
+    if not wnonce:
+        # Try another alternative - search around form
+        alt_pattern2 = re.compile(r'name=["\']woocommerce-add-payment-method-nonce["\'][^>]*value=["\']([^"\']+)', re.IGNORECASE)
+        match2 = alt_pattern2.search(text)
+        if match2:
+            wnonce = match2.group(1)
+            logger.debug("Payment nonce found via form pattern")
+    
+    if not wnonce:
+        logger.error("Payment method nonce not found using any pattern")
+        # Debug info
         if 'braintree' not in text.lower():
             logger.warning("Braintree not found on add-payment-method page")
+        else:
+            logger.debug(f"Braintree found {text.lower().count('braintree')} times in page")
         raise TokenError("Failed to get payment method nonce")
     
     apbct_fields = extract_apbct_fields(text)
-    logger.debug("Payment method nonce retrieved")
+    logger.debug(f"Payment method nonce retrieved: {wnonce[:20]}...")
     
     return wnonce, apbct_fields
 
@@ -1071,8 +1093,10 @@ async def get_braintree_authorization_token(session: aiohttp.ClientSession, url:
                                             apbct_fields: APBCTFields, 
                                             add_payment_text: str) -> str:
     """
-    Get Braintree authorization token directly from embedded token in page.
-    NO AJAX - Direct extraction only.
+    Get Braintree authorization token with multiple methods.
+    Method 1: Embedded token in HTML (fast)
+    Method 2: AJAX call to wp-admin/admin-ajax.php (fallback)
+    Method 3: Payment-methods page token (fallback)
     
     Args:
         session: aiohttp client session
@@ -1094,34 +1118,93 @@ async def get_braintree_authorization_token(session: aiohttp.ClientSession, url:
         if new_fields.ct_no_cookie:
             apbct_fields.ct_no_cookie = new_fields.ct_no_cookie
     
-    # Extract embedded token directly from page (NO AJAX)
-    logger.debug("Extracting embedded Braintree token from page HTML")
+    # METHOD 1: Try embedded token directly from page HTML (fastest)
+    logger.debug("Method 1: Extracting embedded Braintree token from HTML")
     braintree_token = extract_with_regex('braintree_client_token', add_payment_text)
     if not braintree_token:
         braintree_token = extract_with_regex('braintree_client_token_alt', add_payment_text)
     
-    if not braintree_token:
-        logger.error("No embedded Braintree client token found in page HTML")
-        raise TokenError("Braintree client token not found in page")
+    if braintree_token:
+        logger.debug(f"Found embedded token: {braintree_token[:50]}...")
+        try:
+            decoded = base64.b64decode(braintree_token).decode("utf-8")
+            auth_fingerprint = extract_with_regex('auth_fingerprint', decoded)
+            if auth_fingerprint:
+                logger.info(f"✓ Method 1 SUCCESS: Token from embedded HTML")
+                return auth_fingerprint
+        except Exception as e:
+            logger.debug(f"Method 1 failed to decode: {str(e)}")
+    else:
+        logger.debug("Method 1: No embedded token found")
     
-    logger.debug(f"Found embedded token: {braintree_token[:50]}...")
+    # METHOD 2: Try AJAX call to get token (fallback for sites without embedded token)
+    logger.debug("Method 2: Attempting AJAX call to wp-admin/admin-ajax.php")
+    cnonce = extract_with_regex('client_token_nonce', add_payment_text)
+    if not cnonce:
+        cnonce = extract_with_regex('client_token_nonce_alt', add_payment_text)
+    if not cnonce:
+        cnonce = extract_with_regex('client_token_nonce_json', add_payment_text)
     
-    # Decode the token to extract authorization fingerprint
+    if cnonce:
+        logger.debug(f"Found client_token_nonce: {cnonce[:20]}...")
+        post_data_str = f"action=wc_braintree_credit_card_get_client_token&nonce={cnonce}"
+        
+        page_url = f'https://{url}/my-account/add-payment-method/'
+        ajax_headers = get_headers(url, page_url, is_post=True)
+        ajax_headers['content-type'] = 'application/x-www-form-urlencoded; charset=UTF-8'
+        ajax_headers['x-requested-with'] = 'XMLHttpRequest'
+        ajax_headers['accept'] = 'application/json, text/javascript, */*; q=0.01'
+        ajax_headers['sec-fetch-dest'] = 'empty'
+        ajax_headers['sec-fetch-mode'] = 'cors'
+        
+        ajax_url = f'https://{url}/wp-admin/admin-ajax.php'
+        
+        try:
+            logger.debug(f"Making AJAX request to {ajax_url}")
+            ajax_text = await post_data_with_retry(session, ajax_url, post_data_str, ajax_headers)
+            logger.debug(f"AJAX response length: {len(ajax_text)} bytes")
+            
+            # Extract token from AJAX response
+            data_token = extract_with_regex('data_token', ajax_text)
+            if data_token:
+                logger.debug(f"Found data token: {data_token[:50]}...")
+                decoded = base64.b64decode(data_token).decode("utf-8")
+                auth_fingerprint = extract_with_regex('auth_fingerprint', decoded)
+                if auth_fingerprint:
+                    logger.info(f"✓ Method 2 SUCCESS: Token from AJAX")
+                    return auth_fingerprint
+            else:
+                logger.debug("Method 2: AJAX response has no data token")
+                
+        except Exception as e:
+            logger.debug(f"Method 2 AJAX failed: {str(e)}")
+    else:
+        logger.debug("Method 2: No client_token_nonce found for AJAX")
+    
+    # METHOD 3: Try payment-methods page as last resort
+    logger.debug("Method 3: Checking payment-methods page")
     try:
-        decoded = base64.b64decode(braintree_token).decode("utf-8")
-        logger.debug(f"Token decoded successfully: {len(decoded)} bytes")
+        headers = get_headers(url, f'https://{url}/my-account/')
+        payment_methods_url = f'https://{url}/my-account/payment-methods/'
+        pm_text = await fetch_page_with_retry(session, payment_methods_url, headers)
         
-        auth_fingerprint = extract_with_regex('auth_fingerprint', decoded)
-        if not auth_fingerprint:
-            logger.error("Authorization fingerprint not found in decoded token")
-            raise TokenError("No authorizationFingerprint in Braintree token")
+        # Check for embedded token on payment-methods page
+        pm_token = extract_with_regex('braintree_client_token', pm_text)
+        if not pm_token:
+            pm_token = extract_with_regex('braintree_client_token_alt', pm_text)
         
-        logger.info(f"Authorization fingerprint extracted: {auth_fingerprint[:50]}...")
-        return auth_fingerprint
-        
+        if pm_token:
+            decoded = base64.b64decode(pm_token).decode("utf-8")
+            auth_fingerprint = extract_with_regex('auth_fingerprint', decoded)
+            if auth_fingerprint:
+                logger.info(f"✓ Method 3 SUCCESS: Token from payment-methods page")
+                return auth_fingerprint
     except Exception as e:
-        logger.error(f"Failed to decode embedded token: {str(e)}")
-        raise TokenError(f"Token decode failed: {str(e)}")
+        logger.debug(f"Method 3 failed: {str(e)}")
+    
+    # All methods failed
+    logger.error("All token extraction methods failed (HTML, AJAX, payment-methods)")
+    raise TokenError("Could not extract Braintree authorization token using any method")
 
 async def tokenize_card_with_braintree(session: aiohttp.ClientSession, 
                                        card: CardDetails,
