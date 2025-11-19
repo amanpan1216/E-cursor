@@ -187,3 +187,42 @@
 2025-11-19 02:50:56 - bbb - INFO - generate_account_credentials:657 - Generated credentials: us***@gmail.com
 2025-11-19 02:51:06 - bbb - WARNING - perform_registration:776 - Registration may have failed - error indicators found
 2025-11-19 02:51:06 - bbb - INFO - perform_registration:783 - Registration successful: us***@gmail.com
+2025-11-19 03:12:19 - __main__ - INFO - setup_logging:52 - Logging initialized at level INFO
+2025-11-19 03:12:19 - __main__ - INFO - generate_account_credentials:657 - Generated credentials: us***@gmail.com
+2025-11-19 03:12:28 - __main__ - WARNING - perform_registration:776 - Registration may have failed - error indicators found
+2025-11-19 03:12:31 - __main__ - INFO - generate_account_credentials:657 - Generated credentials: us***@gmail.com
+2025-11-19 03:12:46 - __main__ - WARNING - perform_registration:776 - Registration may have failed - error indicators found
+2025-11-19 03:12:49 - __main__ - INFO - generate_account_credentials:657 - Generated credentials: us***@gmail.com
+2025-11-19 03:13:00 - __main__ - WARNING - perform_registration:776 - Registration may have failed - error indicators found
+2025-11-19 03:13:00 - __main__ - INFO - perform_registration:783 - Registration successful: us***@gmail.com
+2025-11-19 03:13:05 - __main__ - INFO - update_billing_address:1009 - Billing address updated successfully
+2025-11-19 03:13:10 - __main__ - INFO - generate_account_credentials:657 - Generated credentials: us***@gmail.com
+2025-11-19 03:13:19 - __main__ - WARNING - perform_registration:776 - Registration may have failed - error indicators found
+2025-11-19 03:13:19 - __main__ - INFO - perform_registration:783 - Registration successful: us***@gmail.com
+2025-11-19 03:13:23 - __main__ - WARNING - update_billing_address:965 - Billing nonce not found, skipping address update
+2025-11-19 03:13:28 - __main__ - INFO - generate_account_credentials:657 - Generated credentials: us***@gmail.com
+2025-11-19 03:13:41 - __main__ - WARNING - perform_registration:776 - Registration may have failed - error indicators found
+2025-11-19 03:13:41 - __main__ - INFO - perform_registration:783 - Registration successful: us***@gmail.com
+2025-11-19 03:13:53 - __main__ - INFO - update_billing_address:1009 - Billing address updated successfully
+2025-11-19 03:14:01 - __main__ - ERROR - post_data:602 - Access Forbidden (403) for POST https://lindywell.com/wp-admin/admin-ajax.php
+2025-11-19 03:14:01 - __main__ - ERROR - wrapper:376 - post_data_with_retry raised unexpected exception: AuthenticationError: Access Forbidden (403) for POST https://lindywell.com/wp-admin/admin-ajax.php
+2025-11-19 03:14:03 - __main__ - ERROR - get_braintree_authorization_token:1206 - All token extraction methods failed (HTML, AJAX, payment-methods)
+2025-11-19 03:14:06 - __main__ - INFO - generate_account_credentials:657 - Generated credentials: us***@gmail.com
+2025-11-19 03:14:19 - __main__ - WARNING - perform_registration:776 - Registration may have failed - error indicators found
+2025-11-19 03:14:22 - __main__ - INFO - generate_account_credentials:657 - Generated credentials: us***@gmail.com
+2025-11-19 03:14:30 - __main__ - WARNING - perform_registration:776 - Registration may have failed - error indicators found
+2025-11-19 03:14:33 - __main__ - INFO - generate_account_credentials:657 - Generated credentials: us***@gmail.com
+2025-11-19 03:14:41 - __main__ - WARNING - perform_registration:776 - Registration may have failed - error indicators found
+2025-11-19 03:14:44 - __main__ - INFO - generate_account_credentials:657 - Generated credentials: us***@gmail.com
+2025-11-19 03:14:57 - __main__ - WARNING - perform_registration:776 - Registration may have failed - error indicators found
+2025-11-19 03:14:57 - __main__ - INFO - perform_registration:783 - Registration successful: us***@gmail.com
+2025-11-19 03:15:04 - __main__ - INFO - update_billing_address:1009 - Billing address updated successfully
+2025-11-19 03:15:07 - __main__ - ERROR - post_data:602 - Access Forbidden (403) for POST https://store.puritywoods.com/wp-admin/admin-ajax.php
+2025-11-19 03:15:07 - __main__ - ERROR - wrapper:376 - post_data_with_retry raised unexpected exception: AuthenticationError: Access Forbidden (403) for POST https://store.puritywoods.com/wp-admin/admin-ajax.php
+2025-11-19 03:15:08 - __main__ - ERROR - get_braintree_authorization_token:1206 - All token extraction methods failed (HTML, AJAX, payment-methods)
+2025-11-19 03:15:11 - __main__ - INFO - generate_account_credentials:657 - Generated credentials: us***@gmail.com
+2025-11-19 03:15:24 - __main__ - WARNING - perform_registration:776 - Registration may have failed - error indicators found
+2025-11-19 03:15:27 - __main__ - INFO - generate_account_credentials:657 - Generated credentials: us***@gmail.com
+2025-11-19 03:15:41 - __main__ - WARNING - perform_registration:776 - Registration may have failed - error indicators found
+2025-11-19 03:15:44 - __main__ - INFO - generate_account_credentials:657 - Generated credentials: us***@gmail.com
+2025-11-19 03:15:58 - __main__ - WARNING - perform_registration:776 - Registration may have failed - error indicators found
