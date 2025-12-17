@@ -21,6 +21,13 @@ try:
 except ImportError:
     pass  # python-dotenv is optional
 
+try:
+    from bs4 import BeautifulSoup
+    HAS_BEAUTIFULSOUP = True
+except ImportError:
+    HAS_BEAUTIFULSOUP = False
+    print("[WARNING] BeautifulSoup not available - fallback extraction disabled")
+
 # ============================================================================
 # CONFIGURATION MANAGEMENT
 # ============================================================================
@@ -694,6 +701,65 @@ def extract_with_regex(pattern_name: str, text: str) -> Optional[str]:
     
     return None
 
+def extract_nonce_with_beautifulsoup(html_text: str, nonce_name: str) -> Optional[str]:
+    """
+    Fallback nonce extraction using BeautifulSoup for DOM parsing.
+    
+    Args:
+        html_text: HTML content
+        nonce_name: Name attribute to search for
+        
+    Returns:
+        Nonce value or None
+    """
+    if not HAS_BEAUTIFULSOUP:
+        return None
+    
+    try:
+        soup = BeautifulSoup(html_text, 'html.parser')
+        
+        # Try finding by name attribute
+        input_elem = soup.find('input', {'name': nonce_name})
+        if input_elem and input_elem.get('value'):
+            logger.debug(f"Extracted {nonce_name} using BeautifulSoup (by name)")
+            return input_elem.get('value')
+        
+        # Try finding by id attribute
+        input_elem = soup.find('input', {'id': nonce_name})
+        if input_elem and input_elem.get('value'):
+            logger.debug(f"Extracted {nonce_name} using BeautifulSoup (by id)")
+            return input_elem.get('value')
+        
+    except Exception as e:
+        logger.debug(f"BeautifulSoup extraction failed: {str(e)}")
+    
+    return None
+
+def extract_with_regex_enhanced(pattern_name: str, text: str, nonce_field_name: Optional[str] = None) -> Optional[str]:
+    """
+    Enhanced extraction with regex + BeautifulSoup fallback.
+    
+    Args:
+        pattern_name: Name of the regex pattern
+        text: Text to search in
+        nonce_field_name: Optional field name for BeautifulSoup fallback
+        
+    Returns:
+        Extracted value or None
+    """
+    # Try regex first
+    result = extract_with_regex(pattern_name, text)
+    if result:
+        return result
+    
+    # Try BeautifulSoup as last resort if field name provided
+    if nonce_field_name:
+        result = extract_nonce_with_beautifulsoup(text, nonce_field_name)
+        if result:
+            return result
+    
+    return None
+
 def analyze_response_text(text: str) -> PaymentResult:
     """
     Analyze response text and determine payment status.
@@ -939,17 +1005,15 @@ async def get_register_nonce(session: aiohttp.ClientSession, url: str) -> Tuple[
     # Small delay after page fetch
     await asyncio.sleep(random.uniform(0.5, 1.5))
     
-    rnonce = extract_with_regex('register_nonce', text)
+    # Try enhanced extraction with BeautifulSoup fallback
+    rnonce = extract_with_regex_enhanced('register_nonce', text, 'woocommerce-register-nonce')
     apbct_fields = extract_apbct_fields(text)
     
     if not rnonce:
-        logger.warning("Registration nonce not found - trying alternative patterns")
-        # Try alternative nonce patterns
-        rnonce = extract_with_regex('register_nonce', text)
-        if not rnonce:
-            # Check if registration might be disabled
-            if 'registration' in text.lower() and 'disabled' in text.lower():
-                logger.warning("Registration appears to be disabled on this site")
+        logger.warning("Registration nonce not found with all methods")
+        # Check if registration might be disabled
+        if 'registration' in text.lower() and 'disabled' in text.lower():
+            logger.warning("Registration appears to be disabled on this site")
     else:
         logger.debug("Registration nonce found")
     
@@ -1089,7 +1153,7 @@ async def perform_login(session: aiohttp.ClientSession, url: str,
     page_url = f'https://{url}/my-account/'
     
     text = await fetch_page_with_retry(session, page_url, headers)
-    lnonce = extract_with_regex('login_nonce', text)
+    lnonce = extract_with_regex_enhanced('login_nonce', text, 'woocommerce-login-nonce')
     
     if not lnonce:
         logger.error("Login nonce not found")
@@ -1208,7 +1272,7 @@ async def update_billing_address(session: aiohttp.ClientSession, url: str,
         logger.debug("Fetching billing address page")
         text = await fetch_page_with_retry(session, page_url, headers)
         
-        anonce = extract_with_regex('billing_nonce', text)
+        anonce = extract_with_regex_enhanced('billing_nonce', text, 'woocommerce-edit-address-nonce')
         if not anonce:
             logger.warning("Billing nonce not found, skipping address update")
             return False
@@ -1291,7 +1355,7 @@ async def get_payment_method_nonce(session: aiohttp.ClientSession, url: str) -> 
         logger.warning("Site uses NMI Gateway, not Braintree - skipping")
         raise TokenError("Site uses NMI Gateway payment method, not Braintree")
     
-    wnonce = extract_with_regex('payment_method_nonce', text)
+    wnonce = extract_with_regex_enhanced('payment_method_nonce', text, 'woocommerce-add-payment-method-nonce')
     if not wnonce:
         logger.error("Payment method nonce not found")
         # Try to debug - check what payment methods are available
