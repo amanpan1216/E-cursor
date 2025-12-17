@@ -1,0 +1,164 @@
+{
+  "sites": {
+    "ads.premierguitar.com": {
+      "enabled": true,
+      "retry_strategy": "normal",
+      "max_retries": 3,
+      "requires_billing": true,
+      "payment_gateway": "braintree",
+      "delays": {
+        "between_requests": 2.0,
+        "after_registration": 3.0
+      }
+    },
+    "dicksondata.com": {
+      "enabled": true,
+      "retry_strategy": "normal",
+      "max_retries": 3,
+      "requires_billing": true,
+      "payment_gateway": "braintree",
+      "delays": {
+        "between_requests": 2.0,
+        "after_registration": 3.0
+      }
+    },
+    "djcity.com.au": {
+      "enabled": true,
+      "retry_strategy": "normal",
+      "max_retries": 3,
+      "requires_billing": true,
+      "payment_gateway": "braintree",
+      "delays": {
+        "between_requests": 2.0,
+        "after_registration": 3.0
+      }
+    },
+    "kolarivision.com": {
+      "enabled": true,
+      "retry_strategy": "normal",
+      "max_retries": 3,
+      "requires_billing": true,
+      "payment_gateway": "braintree",
+      "delays": {
+        "between_requests": 2.0,
+        "after_registration": 3.0
+      }
+    },
+    "lindywell.com": {
+      "enabled": true,
+      "retry_strategy": "normal",
+      "max_retries": 3,
+      "requires_billing": true,
+      "payment_gateway": "braintree",
+      "delays": {
+        "between_requests": 2.0,
+        "after_registration": 3.0
+      }
+    },
+    "naturalacneclinic.com": {
+      "enabled": true,
+      "retry_strategy": "normal",
+      "max_retries": 3,
+      "requires_billing": true,
+      "payment_gateway": "braintree",
+      "delays": {
+        "between_requests": 2.0,
+        "after_registration": 3.0
+      }
+    },
+    "perennialsfabrics.com": {
+      "enabled": true,
+      "retry_strategy": "normal",
+      "max_retries": 3,
+      "requires_billing": true,
+      "payment_gateway": "braintree",
+      "delays": {
+        "between_requests": 2.0,
+        "after_registration": 3.0
+      }
+    },
+    "shop.bullfrogspas.com": {
+      "enabled": true,
+      "retry_strategy": "normal",
+      "max_retries": 3,
+      "requires_billing": true,
+      "payment_gateway": "braintree",
+      "delays": {
+        "between_requests": 2.0,
+        "after_registration": 3.0
+      }
+    },
+    "store.puritywoods.com": {
+      "enabled": true,
+      "retry_strategy": "normal",
+      "max_retries": 3,
+      "requires_billing": true,
+      "payment_gateway": "braintree",
+      "delays": {
+        "between_requests": 2.0,
+        "after_registration": 3.0
+      }
+    },
+    "strymon.net": {
+      "enabled": true,
+      "retry_strategy": "normal",
+      "max_retries": 3,
+      "requires_billing": true,
+      "payment_gateway": "braintree",
+      "delays": {
+        "between_requests": 2.0,
+        "after_registration": 3.0
+      }
+    },
+    "truedark.com": {
+      "enabled": true,
+      "retry_strategy": "normal",
+      "max_retries": 3,
+      "requires_billing": true,
+      "payment_gateway": "braintree",
+      "delays": {
+        "between_requests": 2.0,
+        "after_registration": 3.0
+      }
+    },
+    "winixamerica.com": {
+      "enabled": true,
+      "retry_strategy": "normal",
+      "max_retries": 3,
+      "requires_billing": true,
+      "payment_gateway": "braintree",
+      "delays": {
+        "between_requests": 2.0,
+        "after_registration": 3.0
+      }
+    }
+  },
+  "defaults": {
+    "retry_strategy": "normal",
+    "max_retries": 3,
+    "timeout": 30,
+    "requires_billing": true,
+    "payment_gateway": "braintree",
+    "delays": {
+      "between_requests": 2.0,
+      "after_registration": 3.0
+    }
+  },
+  "retry_strategies": {
+    "aggressive": {
+      "max_retries": 5,
+      "initial_delay": 1.0,
+      "backoff_multiplier": 2.0
+    },
+    "normal": {
+      "max_retries": 3,
+      "initial_delay": 1.0,
+      "backoff_multiplier": 2.0
+    },
+    "conservative": {
+      "max_retries": 2,
+      "initial_delay": 2.0,
+      "backoff_multiplier": 1.5
+    }
+  }
+}
