@@ -198,7 +198,8 @@ class CircuitBreaker:
         if self.failures[site] >= self.failure_threshold:
             self.state[site] = 'open'
             self.opened_at[site] = time.time()
-            logger.warning(f"Circuit breaker OPENED for {site} after {self.failures[site]} failures")
+            # Use print instead of logger to avoid forward reference
+            print(f"[WARNING] Circuit breaker OPENED for {site} after {self.failures[site]} failures")
     
     def can_attempt(self, site: str) -> bool:
         """Check if we can attempt to access a site"""
@@ -212,7 +213,7 @@ class CircuitBreaker:
             opened_at = self.opened_at.get(site, 0)
             if time.time() - opened_at > self.recovery_timeout:
                 self.state[site] = 'half-open'
-                logger.info(f"Circuit breaker entering HALF-OPEN state for {site}")
+                print(f"[INFO] Circuit breaker entering HALF-OPEN state for {site}")
                 return True
             return False
         
@@ -473,37 +474,41 @@ class Config:
     CONNECTOR_LIMIT = 100
     CONNECTOR_LIMIT_PER_HOST = 20
     
-    # Default password (should be set via environment variable)
-    DEFAULT_PASSWORD = os.getenv("BRAINTREE_DEFAULT_PASSWORD", "TestPass123!@#")
+    # Default password - MUST be set via environment variable in production
+    # The fallback is only for testing/development
+    DEFAULT_PASSWORD = os.getenv("BRAINTREE_DEFAULT_PASSWORD")
+    if not DEFAULT_PASSWORD:
+        DEFAULT_PASSWORD = "TestPass123!@#"
+        print("[WARNING] Using default password - set BRAINTREE_DEFAULT_PASSWORD env variable for production")
     
     # Success messages
-SUCCESS_MESSAGES = {
-    'nice! new payment method added',
-    'payment method successfully added',
-    'duplicate card exists in the vault',
-    'payment method added'
-}
+    SUCCESS_MESSAGES = {
+        'nice! new payment method added',
+        'payment method successfully added',
+        'duplicate card exists in the vault',
+        'payment method added'
+    }
 
     # Decline messages mapping
-DECLINE_MESSAGES = {
-    'card number is incorrect': 'Invalid Card Number',
-    'invalid card': 'Invalid Card',
-    'card declined': 'Card Declined',
-    'invalid cvv': 'Invalid CVV',
-    'expired card': 'Card Expired',
-    'do not honor': 'Do Not Honor',
-    'stolen card': 'Stolen Card',
-    'lost card': 'Lost Card',
-    'pickup card': 'Pickup Card',
-    'transaction not allowed': 'Transaction Not Allowed',
-    'security code is incorrect': 'Invalid CVV',
-    'status code risk_threshold: gateway rejected: risk_threshold': 'Gateway Rejected: risk_threshold',
-    '3d secure': '3D Secure Required',
-    'authentication required': '3D Secure Required',
-    'verification required': '3D Secure Required',
-    'insufficient funds': 'Low Fund',
-    'processor declined': 'Processor Declined'
-}
+    DECLINE_MESSAGES = {
+        'card number is incorrect': 'Invalid Card Number',
+        'invalid card': 'Invalid Card',
+        'card declined': 'Card Declined',
+        'invalid cvv': 'Invalid CVV',
+        'expired card': 'Card Expired',
+        'do not honor': 'Do Not Honor',
+        'stolen card': 'Stolen Card',
+        'lost card': 'Lost Card',
+        'pickup card': 'Pickup Card',
+        'transaction not allowed': 'Transaction Not Allowed',
+        'security code is incorrect': 'Invalid CVV',
+        'status code risk_threshold: gateway rejected: risk_threshold': 'Gateway Rejected: risk_threshold',
+        '3d secure': '3D Secure Required',
+        'authentication required': '3D Secure Required',
+        'verification required': '3D Secure Required',
+        'insufficient funds': 'Low Fund',
+        'processor declined': 'Processor Declined'
+    }
 
 # ============================================================================
 # REGEX PATTERNS

@@ -145,6 +145,7 @@
     }
   },
   "retry_strategies": {
+    "_comment": "These define named retry strategy templates. Site-level max_retries will override strategy max_retries if specified.",
     "aggressive": {
       "max_retries": 5,
       "initial_delay": 1.0,
