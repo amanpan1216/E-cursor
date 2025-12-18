@@ -1,6 +1,6 @@
 # 🚀 E-Cursor Payment Gateway - Comprehensive Improvement Plan
 
-> **Note**: यह document पूरे repository को analyze करने के बाद बनाया गया है। इसमें सभी folders, files और code का detailed analysis है।
+> **Note**: This document was created after analyzing the entire repository. It contains detailed analysis of all folders, files, and code.
 
 ---
 
@@ -397,11 +397,11 @@ if (parsedUrl.pathname === '/health') {
 ### Step 1: Fix Import Paths in proxy-server.js
 
 ```javascript
-// Current (WRONG - uses imp folder)
+// Current (WRONG - uses imp folder which has duplicate code)
 const { fetchCheckoutInfo, parseCheckoutUrl, StripeCheckoutInfoError } 
-    = require('./gateways/stripe/checkout-based/checkout-info');
+    = require('./imp/checkout-info');
 
-// CORRECT Path (use gateways)
+// CORRECT Path (use gateways - single source of truth)
 const { fetchCheckoutInfo, parseCheckoutUrl, StripeCheckoutInfoError } 
     = require('./gateways/stripe/checkout-based/checkout-info');
 
