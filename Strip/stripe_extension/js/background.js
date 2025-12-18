@@ -29,27 +29,59 @@ let currentSession = {
     proxy: null
 };
 
-// Generate random headers for fresh session
+// Generate realistic headers based on actual device fingerprint
 function generateFreshHeaders() {
-    const userAgents = [
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15'
-    ];
+    // Get real device info from navigator
+    const platform = navigator.platform || 'Win32';
+    const vendor = navigator.vendor || 'Google Inc.';
+    const language = navigator.language || 'en-US';
     
-    const acceptLanguages = [
-        'en-US,en;q=0.9',
-        'en-GB,en;q=0.9',
-        'en-US,en;q=0.9,es;q=0.8',
-        'en-US,en;q=0.8'
-    ];
+    // Realistic Chrome versions (recent)
+    const chromeVersions = ['120.0.0.0', '121.0.0.0', '122.0.0.0', '123.0.0.0'];
+    const chromeVersion = chromeVersions[Math.floor(Math.random() * chromeVersions.length)];
+    
+    // Build realistic user agent based on actual platform
+    let userAgent;
+    if (platform.includes('Win')) {
+        userAgent = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36`;
+    } else if (platform.includes('Mac')) {
+        userAgent = `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36`;
+    } else if (platform.includes('Linux')) {
+        userAgent = `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36`;
+    } else {
+        // Default to Windows
+        userAgent = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36`;
+    }
+    
+    // Generate realistic accept headers
+    const acceptLanguage = `${language},${language.split('-')[0]};q=0.9,en;q=0.8`;
+    const accept = 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8';
+    const acceptEncoding = 'gzip, deflate, br';
+    
+    // Screen resolution from actual device
+    const screenWidth = screen.width || 1920;
+    const screenHeight = screen.height || 1080;
+    const colorDepth = screen.colorDepth || 24;
+    
+    // Timezone offset
+    const timezoneOffset = new Date().getTimezoneOffset();
     
     return {
-        userAgent: userAgents[Math.floor(Math.random() * userAgents.length)],
-        acceptLanguage: acceptLanguages[Math.floor(Math.random() * acceptLanguages.length)],
-        timestamp: Date.now()
+        userAgent,
+        acceptLanguage,
+        accept,
+        acceptEncoding,
+        platform,
+        vendor,
+        language,
+        screenResolution: `${screenWidth}x${screenHeight}`,
+        colorDepth,
+        timezoneOffset,
+        timestamp: Date.now(),
+        // Additional fingerprint data
+        hardwareConcurrency: navigator.hardwareConcurrency || 8,
+        deviceMemory: navigator.deviceMemory || 8,
+        doNotTrack: navigator.doNotTrack || 'unspecified'
     };
 }
 

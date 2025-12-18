@@ -244,36 +244,30 @@
     function simulateInput(element, value) {
         if (!element) return;
         
+        // Direct paste method - no keyboard simulation
         element.focus();
-        
         element.dispatchEvent(new Event('focus', { bubbles: true }));
         
-        element.value = '';
+        // Set value directly
+        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        nativeInputValueSetter.call(element, value);
+        
+        // Trigger events for React/Vue/Angular frameworks
         element.dispatchEvent(new Event('input', { bubbles: true }));
-        
-        for (let i = 0; i < value.length; i++) {
-            const char = value[i];
-            
-            element.value += char;
-            
-            element.dispatchEvent(new KeyboardEvent('keydown', { 
-                key: char, 
-                code: `Key${char.toUpperCase()}`,
-                bubbles: true 
-            }));
-            element.dispatchEvent(new KeyboardEvent('keypress', { 
-                key: char,
-                bubbles: true 
-            }));
-            element.dispatchEvent(new Event('input', { bubbles: true }));
-            element.dispatchEvent(new KeyboardEvent('keyup', { 
-                key: char,
-                bubbles: true 
-            }));
-        }
-        
         element.dispatchEvent(new Event('change', { bubbles: true }));
+        
+        // For Stripe Elements
+        const inputEvent = new InputEvent('input', {
+            bubbles: true,
+            cancelable: true,
+            inputType: 'insertText',
+            data: value
+        });
+        element.dispatchEvent(inputEvent);
+        
         element.dispatchEvent(new Event('blur', { bubbles: true }));
+        
+        log('Direct paste:', value.substring(0, 4) + '****');
     }
 
     function selectOption(selectElement, value) {
@@ -637,6 +631,24 @@
                 timestamp: Date.now()
             });
         } catch (e) {}
+    }
+    
+    function saveCheckoutLog(checkoutInfo) {
+        chrome.storage.local.get(['checkoutLogs'], (data) => {
+            const checkoutLogs = data.checkoutLogs || [];
+            const logEntry = {
+                ...checkoutInfo,
+                timestamp: Date.now(),
+                detectedAt: new Date().toISOString()
+            };
+            checkoutLogs.unshift(logEntry); // Add to beginning
+            // Keep only last 50 checkout logs
+            if (checkoutLogs.length > 50) {
+                checkoutLogs.splice(50);
+            }
+            chrome.storage.local.set({ checkoutLogs });
+            log('Checkout log saved:', logEntry);
+        });
     }
 
     function initializeModules() {
@@ -1141,13 +1153,17 @@
         
         if (detectCheckoutPage()) {
             log('Checkout page detected!');
+            const checkoutInfo = extractCheckoutInfo();
             createFloatingPanel();
             createDetectionBadge();
             showToast('Stripe Checkout Detected', 'info', new Date().toLocaleTimeString());
             notifyPopup('checkoutDetected', { 
-                info: extractCheckoutInfo(),
+                info: checkoutInfo,
                 hasCardFields: cardFieldsDetected
             });
+            
+            // Save checkout log
+            saveCheckoutLog(checkoutInfo);
             
             // Auto-fill billing details
             if (config.autoFillEmail || config.autoFillName) {

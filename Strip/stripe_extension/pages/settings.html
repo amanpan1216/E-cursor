@@ -72,22 +72,46 @@
             
             <!-- Center column -->
             <div class="dashboard-column center-column">
-                <div class="hit-logs-container-wrapper">
-                    <div class="hit-logs-header">
-                        <div class="hit-logs-title">
-                            <i class="fas fa-list"></i>
-                            <span>Hit Logs</span>
+                <!-- Checkout Log Section -->
+                <div class="logs-container-wrapper">
+                    <div class="logs-header">
+                        <div class="logs-title">
+                            <i class="fas fa-shopping-cart"></i>
+                            <span>Checkout Logs</span>
                         </div>
-                        <div class="hit-logs-actions">
-                            <button id="copy-all-cards" class="copy-all-btn">
-                                <i class="fas fa-copy"></i> Copy Live
+                        <div class="logs-actions">
+                            <button id="copy-checkout-logs" class="copy-btn">
+                                <i class="fas fa-copy"></i> Copy
                             </button>
-                            <button id="clear-hit-logs" class="clear-logs-btn">
+                            <button id="clear-checkout-logs" class="clear-btn">
                                 <i class="fas fa-trash"></i> Clear
                             </button>
                         </div>
                     </div>
-                    <div id="hit-logs-container" class="hit-logs-container"></div>
+                    <div id="checkout-logs-container" class="logs-container checkout-logs">
+                        <div class="empty-logs">No checkout sessions yet</div>
+                    </div>
+                </div>
+                
+                <!-- Card Log Section -->
+                <div class="logs-container-wrapper" style="margin-top: 15px;">
+                    <div class="logs-header">
+                        <div class="logs-title">
+                            <i class="fas fa-credit-card"></i>
+                            <span>Card Response Logs</span>
+                        </div>
+                        <div class="logs-actions">
+                            <button id="copy-all-cards" class="copy-btn">
+                                <i class="fas fa-copy"></i> Copy Live
+                            </button>
+                            <button id="clear-card-logs" class="clear-btn">
+                                <i class="fas fa-trash"></i> Clear
+                            </button>
+                        </div>
+                    </div>
+                    <div id="card-logs-container" class="logs-container card-logs">
+                        <div class="empty-logs">No card responses yet</div>
+                    </div>
                 </div>
             </div>
             

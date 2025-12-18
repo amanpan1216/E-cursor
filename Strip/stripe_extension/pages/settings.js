@@ -3,8 +3,16 @@ document.addEventListener('DOMContentLoaded', () => {
     initMenu();
     loadAllSettings();
     setupEventListeners();
-    loadHitLogs();
+    loadCheckoutLogs();
+    loadCardLogs();
     loadStatistics();
+    
+    // Auto-refresh logs every 5 seconds
+    setInterval(() => {
+        loadCheckoutLogs();
+        loadCardLogs();
+        loadStatistics();
+    }, 5000);
 });
 
 function initClock() {
@@ -123,9 +131,51 @@ async function loadAllSettings() {
     document.getElementById('autofill-country').value = autofill.country || 'US';
 }
 
-async function loadHitLogs() {
-    const data = await chrome.storage.local.get(['hitLogs', 'liveCards', 'deadCards']);
-    const container = document.getElementById('hit-logs-container');
+async function loadCheckoutLogs() {
+    const data = await chrome.storage.local.get(['checkoutLogs']);
+    const container = document.getElementById('checkout-logs-container');
+    const checkoutLogs = data.checkoutLogs || [];
+    
+    if (checkoutLogs.length === 0) {
+        container.innerHTML = '<div class="empty-logs">No checkout sessions yet</div>';
+        return;
+    }
+    
+    container.innerHTML = checkoutLogs.slice(0, 30).map(log => `
+        <div class="checkout-log-item">
+            <div class="checkout-log-header">
+                <div class="checkout-log-merchant">
+                    <i class="fas fa-store"></i> ${log.merchantName || 'Unknown Merchant'}
+                </div>
+                <div class="checkout-log-time">${new Date(log.timestamp).toLocaleString()}</div>
+            </div>
+            <div class="checkout-log-details">
+                <div class="checkout-detail">
+                    <span class="detail-label">Amount:</span>
+                    <span class="detail-value">${log.amount || 'N/A'} ${log.currency || ''}</span>
+                </div>
+                <div class="checkout-detail">
+                    <span class="detail-label">Session:</span>
+                    <span class="detail-value session-id">${log.sessionId ? log.sessionId.substring(0, 20) + '...' : 'N/A'}</span>
+                </div>
+                <div class="checkout-detail">
+                    <span class="detail-label">URL:</span>
+                    <span class="detail-value url-text">${log.url ? log.url.substring(0, 40) + '...' : 'N/A'}</span>
+                </div>
+                ${log.productName ? `
+                <div class="checkout-detail">
+                    <span class="detail-label">Product:</span>
+                    <span class="detail-value">${log.productName}</span>
+                </div>
+                ` : ''}
+            </div>
+        </div>
+    `).join('');
+}
+
+async function loadCardLogs() {
+    const data = await chrome.storage.local.get(['liveCards', 'deadCards']);
+    const container = document.getElementById('card-logs-container');
     const liveCards = data.liveCards || [];
     const deadCards = data.deadCards || [];
     
@@ -135,16 +185,40 @@ async function loadHitLogs() {
     ].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
     
     if (allLogs.length === 0) {
-        container.innerHTML = '<div class="empty-logs">No hits yet</div>';
+        container.innerHTML = '<div class="empty-logs">No card responses yet</div>';
         return;
     }
     
     container.innerHTML = allLogs.slice(0, 50).map(log => `
-        <div class="hit-log-item ${log.type}">
-            <div class="hit-log-card">${log.number.slice(0, 6)}******${log.number.slice(-4)}</div>
-            <div class="hit-log-status ${log.type}">${log.type.toUpperCase()}</div>
-            <div class="hit-log-time">${log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : ''}</div>
-            ${log.error ? `<div class="hit-log-error">${log.error}</div>` : ''}
+        <div class="card-log-item ${log.type}">
+            <div class="card-log-header">
+                <div class="card-log-card">
+                    <i class="fas fa-credit-card"></i>
+                    ${log.card || log.number ? (log.card || `${log.number.slice(0, 6)}******${log.number.slice(-4)}`) : 'Unknown'}
+                </div>
+                <div class="card-log-status ${log.type}">
+                    <i class="fas fa-${log.type === 'live' ? 'check-circle' : 'times-circle'}"></i>
+                    ${log.type.toUpperCase()}
+                </div>
+            </div>
+            <div class="card-log-details">
+                <div class="card-detail">
+                    <span class="detail-label">Time:</span>
+                    <span class="detail-value">${log.timestamp ? new Date(log.timestamp).toLocaleString() : 'N/A'}</span>
+                </div>
+                ${log.reason || log.error ? `
+                <div class="card-detail">
+                    <span class="detail-label">Reason:</span>
+                    <span class="detail-value error-text">${log.reason || log.error}</span>
+                </div>
+                ` : ''}
+                ${log.url ? `
+                <div class="card-detail">
+                    <span class="detail-label">URL:</span>
+                    <span class="detail-value url-text">${log.url.substring(0, 40)}...</span>
+                </div>
+                ` : ''}
+            </div>
         </div>
     `).join('');
 }
@@ -175,7 +249,9 @@ function setupEventListeners() {
     document.getElementById('reset-settings').addEventListener('click', resetSettings);
     document.getElementById('clear-all-data').addEventListener('click', clearAllData);
     document.getElementById('copy-all-cards').addEventListener('click', copyLiveCards);
-    document.getElementById('clear-hit-logs').addEventListener('click', clearHitLogs);
+    document.getElementById('copy-checkout-logs').addEventListener('click', copyCheckoutLogs);
+    document.getElementById('clear-checkout-logs').addEventListener('click', clearCheckoutLogs);
+    document.getElementById('clear-card-logs').addEventListener('click', clearCardLogs);
     document.getElementById('reset-stats-btn').addEventListener('click', resetStatistics);
     
     document.getElementById('mode-autohit').addEventListener('click', () => setMode('autohit'));
@@ -326,10 +402,33 @@ async function saveAllSettings() {
     settings.autoSubmit = document.getElementById('auto-submit-toggle').checked;
     settings.autoNext = document.getElementById('auto-next-toggle').checked;
     settings.verbose = document.getElementById('verbose-toggle').checked;
+    settings.autoFillEmail = document.getElementById('auto-fill-toggle').checked;
+    settings.autoFillName = document.getElementById('auto-fill-toggle').checked;
+    
+    // Persist all settings with timestamp
+    settings.lastUpdated = Date.now();
+    settings.version = '3.1.0';
     
     await chrome.storage.local.set({ settings });
     chrome.runtime.sendMessage({ type: 'settingsUpdated', settings });
-    showNotification('All settings saved', 'success');
+    
+    // Also persist current state
+    const currentState = {
+        cards: document.getElementById('card-list-input').value,
+        email: document.getElementById('email-input').value,
+        proxyList: document.getElementById('proxy-input').value,
+        autofillData: {
+            name: document.getElementById('autofill-name').value,
+            address: document.getElementById('autofill-address').value,
+            city: document.getElementById('autofill-city').value,
+            zip: document.getElementById('autofill-zip').value,
+            country: document.getElementById('autofill-country').value
+        },
+        lastSaved: Date.now()
+    };
+    
+    await chrome.storage.local.set({ persistedState: currentState });
+    showNotification('All settings and data saved', 'success');
 }
 
 async function resetSettings() {
@@ -377,12 +476,35 @@ async function copyLiveCards() {
     }
 }
 
-async function clearHitLogs() {
-    if (confirm('Clear all hit logs?')) {
-        await chrome.storage.local.set({ liveCards: [], deadCards: [], hitLogs: [] });
-        loadHitLogs();
+async function copyCheckoutLogs() {
+    const data = await chrome.storage.local.get(['checkoutLogs']);
+    const checkoutLogs = data.checkoutLogs || [];
+    const text = checkoutLogs.map(log => 
+        `Merchant: ${log.merchantName || 'Unknown'}\nAmount: ${log.amount} ${log.currency}\nSession: ${log.sessionId}\nURL: ${log.url}\nTime: ${new Date(log.timestamp).toLocaleString()}\n---`
+    ).join('\n');
+    
+    if (text) {
+        navigator.clipboard.writeText(text);
+        showNotification(`${checkoutLogs.length} checkout logs copied`, 'success');
+    } else {
+        showNotification('No checkout logs to copy', 'warning');
+    }
+}
+
+async function clearCheckoutLogs() {
+    if (confirm('Clear all checkout logs?')) {
+        await chrome.storage.local.set({ checkoutLogs: [] });
+        loadCheckoutLogs();
+        showNotification('Checkout logs cleared', 'success');
+    }
+}
+
+async function clearCardLogs() {
+    if (confirm('Clear all card logs?')) {
+        await chrome.storage.local.set({ liveCards: [], deadCards: [] });
+        loadCardLogs();
         loadStatistics();
-        showNotification('Hit logs cleared', 'success');
+        showNotification('Card logs cleared', 'success');
     }
 }
 
@@ -420,8 +542,11 @@ function showNotification(message, type) {
 chrome.storage.onChanged.addListener((changes, namespace) => {
     if (namespace === 'local') {
         if (changes.liveCards || changes.deadCards) {
-            loadHitLogs();
+            loadCardLogs();
             loadStatistics();
+        }
+        if (changes.checkoutLogs) {
+            loadCheckoutLogs();
         }
     }
 });

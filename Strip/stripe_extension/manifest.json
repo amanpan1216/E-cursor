@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Stripe Toolkit",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Advanced Stripe Checkout automation toolkit with auto-captcha click, result capture, proxy support, and session management",
   "author": "Strip Developer",
   "permissions": [
@@ -13,10 +13,9 @@
     "clipboardRead",
     "clipboardWrite",
     "notifications",
-    "proxy",
     "webRequest",
-    "webRequestBlocking",
-    "webRequestAuthProvider"
+    "declarativeNetRequest",
+    "declarativeNetRequestWithHostAccess"
   ],
   "host_permissions": [
     "https://checkout.stripe.com/*",
