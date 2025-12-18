@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stripe Toolkit - Options</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f8f9fa;
+            color: #1a1a2e;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        header h1 {
+            font-size: 28px;
+            color: #5469d4;
+            margin-bottom: 8px;
+        }
+
+        header p {
+            color: #6b7280;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .card h2 {
+            font-size: 18px;
+            color: #374151;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: #374151;
+            margin-bottom: 6px;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #5469d4;
+            box-shadow: 0 0 0 3px rgba(84, 105, 212, 0.1);
+        }
+
+        .form-group textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+
+        .form-group small {
+            display: block;
+            margin-top: 6px;
+            font-size: 12px;
+            color: #9ca3af;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: #5469d4;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #5469d4;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #4338ca;
+        }
+
+        .btn-secondary {
+            background: #f3f4f6;
+            color: #374151;
+            border: 1px solid #d1d5db;
+        }
+
+        .btn-secondary:hover {
+            background: #e5e7eb;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .button-row {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 14px 24px;
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            animation: slideIn 0.3s ease;
+        }
+
+        .notification.success { background: #22c55e; }
+        .notification.error { background: #ef4444; }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>⚡ Stripe Toolkit Options</h1>
+            <p>Configure your extension settings</p>
+        </header>
+
+        <div class="card">
+            <h2>🔐 Captcha Settings</h2>
+            <div class="form-group">
+                <label for="captcha-service">Captcha Solving Service</label>
+                <select id="captcha-service">
+                    <option value="internal">Internal Solver (Free, Limited)</option>
+                    <option value="2captcha">2Captcha</option>
+                    <option value="anticaptcha">Anti-Captcha</option>
+                    <option value="capmonster">CapMonster</option>
+                </select>
+                <small>Choose your preferred captcha solving service</small>
+            </div>
+            <div class="form-group">
+                <label for="captcha-api-key">API Key</label>
+                <input type="password" id="captcha-api-key" placeholder="Enter your API key">
+                <small>Required for external captcha services</small>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>🌐 Proxy Settings</h2>
+            <div class="form-group">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="proxy-enabled">
+                    <label for="proxy-enabled">Enable Proxy Rotation</label>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="proxy-list">Proxy List</label>
+                <textarea id="proxy-list" placeholder="host:port:username:password&#10;192.168.1.1:8080:user:pass&#10;..."></textarea>
+                <small>One proxy per line. Format: host:port:username:password</small>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>⚙️ General Settings</h2>
+            <div class="form-group">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="auto-fill">
+                    <label for="auto-fill">Auto-fill card details on page load</label>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="auto-fingerprint" checked>
+                    <label for="auto-fingerprint">Auto-apply fingerprint spoofing</label>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="auto-antibot" checked>
+                    <label for="auto-antibot">Auto-apply anti-bot measures</label>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="verbose-logging" checked>
+                    <label for="verbose-logging">Enable verbose logging</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>📊 Data Management</h2>
+            <div class="form-group">
+                <label>Session Data</label>
+                <small>Clear all stored session data and results</small>
+            </div>
+            <div class="button-row">
+                <button class="btn btn-secondary" id="export-data">Export Data</button>
+                <button class="btn btn-danger" id="clear-data">Clear All Data</button>
+            </div>
+        </div>
+
+        <div class="button-row">
+            <button class="btn btn-primary" id="save-settings">Save Settings</button>
+            <button class="btn btn-secondary" id="reset-settings">Reset to Defaults</button>
+        </div>
+    </div>
+
+    <script>
+        // Load settings
+        document.addEventListener('DOMContentLoaded', async () => {
+            const settings = await chrome.runtime.sendMessage({ type: 'getSettings' });
+            
+            if (settings) {
+                document.getElementById('captcha-service').value = settings.captchaService || 'internal';
+                document.getElementById('captcha-api-key').value = settings.captchaApiKey || '';
+                document.getElementById('proxy-enabled').checked = settings.proxyEnabled || false;
+                document.getElementById('proxy-list').value = (settings.proxyList || []).join('\n');
+                document.getElementById('auto-fill').checked = settings.autoFillEnabled || false;
+                document.getElementById('auto-fingerprint').checked = settings.autoFingerprint !== false;
+                document.getElementById('auto-antibot').checked = settings.autoAntiBot !== false;
+                document.getElementById('verbose-logging').checked = settings.verbose !== false;
+            }
+        });
+
+        // Save settings
+        document.getElementById('save-settings').addEventListener('click', async () => {
+            const settings = {
+                captchaService: document.getElementById('captcha-service').value,
+                captchaApiKey: document.getElementById('captcha-api-key').value,
+                proxyEnabled: document.getElementById('proxy-enabled').checked,
+                proxyList: document.getElementById('proxy-list').value.split('\n').filter(p => p.trim()),
+                autoFillEnabled: document.getElementById('auto-fill').checked,
+                autoFingerprint: document.getElementById('auto-fingerprint').checked,
+                autoAntiBot: document.getElementById('auto-antibot').checked,
+                verbose: document.getElementById('verbose-logging').checked
+            };
+
+            await chrome.runtime.sendMessage({ type: 'saveSettings', data: settings });
+            showNotification('Settings saved successfully!', 'success');
+        });
+
+        // Reset settings
+        document.getElementById('reset-settings').addEventListener('click', () => {
+            document.getElementById('captcha-service').value = 'internal';
+            document.getElementById('captcha-api-key').value = '';
+            document.getElementById('proxy-enabled').checked = false;
+            document.getElementById('proxy-list').value = '';
+            document.getElementById('auto-fill').checked = false;
+            document.getElementById('auto-fingerprint').checked = true;
+            document.getElementById('auto-antibot').checked = true;
+            document.getElementById('verbose-logging').checked = true;
+            showNotification('Settings reset to defaults', 'success');
+        });
+
+        // Export data
+        document.getElementById('export-data').addEventListener('click', async () => {
+            const sessions = await chrome.runtime.sendMessage({ type: 'getSessions' });
+            const results = await chrome.runtime.sendMessage({ type: 'getResults' });
+            
+            const data = { sessions, results, exportedAt: new Date().toISOString() };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `stripe-toolkit-export-${Date.now()}.json`;
+            a.click();
+            
+            URL.revokeObjectURL(url);
+            showNotification('Data exported successfully!', 'success');
+        });
+
+        // Clear data
+        document.getElementById('clear-data').addEventListener('click', async () => {
+            if (confirm('Are you sure you want to clear all data? This cannot be undone.')) {
+                await chrome.runtime.sendMessage({ type: 'clearResults' });
+                await chrome.storage.local.clear();
+                showNotification('All data cleared', 'success');
+            }
+        });
+
+        // Show notification
+        function showNotification(message, type) {
+            const existing = document.querySelector('.notification');
+            if (existing) existing.remove();
+
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+
+            setTimeout(() => notification.remove(), 3000);
+        }
+    </script>
+</body>
+</html>

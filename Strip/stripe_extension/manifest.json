@@ -1,0 +1,84 @@
+{
+  "manifest_version": 3,
+  "name": "Stripe Checkout Toolkit",
+  "version": "1.0.0",
+  "description": "Advanced Stripe Checkout automation toolkit with fingerprinting, anti-bot bypass, and session management",
+  "author": "Strip Developer",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "cookies",
+    "webRequest",
+    "webNavigation",
+    "scripting",
+    "tabs",
+    "clipboardRead",
+    "clipboardWrite",
+    "notifications"
+  ],
+  "host_permissions": [
+    "https://checkout.stripe.com/*",
+    "https://api.stripe.com/*",
+    "https://*.stripe.com/*",
+    "https://js.stripe.com/*",
+    "https://hcaptcha.com/*",
+    "https://*.hcaptcha.com/*",
+    "https://2captcha.com/*",
+    "https://api.anti-captcha.com/*",
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "js/background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://checkout.stripe.com/*",
+        "https://*.stripe.com/*"
+      ],
+      "js": [
+        "js/core/fingerprint.js",
+        "js/core/antibot.js",
+        "js/core/session.js",
+        "js/modules/captcha-solver.js",
+        "js/modules/three-ds-handler.js",
+        "js/modules/payment-handler.js",
+        "js/content.js"
+      ],
+      "css": ["css/content.css"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+  "action": {
+    "default_popup": "pages/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_title": "Stripe Toolkit"
+  },
+  "options_page": "pages/options.html",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "js/*",
+        "css/*",
+        "pages/*"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}
