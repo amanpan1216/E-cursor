@@ -25,8 +25,23 @@ from core.behavior import (
 
 from core.http_client import (
     AdvancedHTTPClient,
+    PersistentHTTPClient,
     ProxyManager,
     RedirectHandler
+)
+
+from core.session_persistence import (
+    SessionPersistenceManager,
+    CheckoutSessionData
+)
+
+from core.checkout_session import (
+    CheckoutSessionManager,
+    CheckoutStatus,
+    CheckoutStep,
+    CardInfo as CheckoutCardInfo,
+    BillingInfo as CheckoutBillingInfo,
+    ShippingInfo as CheckoutShippingInfo
 )
 
 from platforms.woocommerce import (
@@ -100,6 +115,9 @@ class CheckoutConfig:
     max_retries: int = 3
     delay_between_cards: float = 2.0
     log_dir: str = "logs"
+    session_dir: str = "sessions"
+    session_ttl: int = 3600
+    use_persistent_sessions: bool = True
     verbose: bool = True
 
 
@@ -166,8 +184,23 @@ class CheckoutAutomation:
     def __init__(self, config: CheckoutConfig):
         self.config = config
         self.session_manager = SessionManager()
-        self.http_client = AdvancedHTTPClient(self.session_manager)
+        
+        # Use persistent HTTP client if enabled
+        if config.use_persistent_sessions:
+            self.http_client = PersistentHTTPClient(
+                session_storage_dir=config.session_dir,
+                session_ttl=config.session_ttl
+            )
+            self.persistence_manager = SessionPersistenceManager(
+                config.session_dir,
+                config.session_ttl
+            )
+        else:
+            self.http_client = AdvancedHTTPClient(self.session_manager)
+            self.persistence_manager = None
+        
         self.behavior = HumanBehaviorSimulator()
+        self.current_checkout_session = None
         self.platform_detector = PlatformDetector(self.http_client)
         self.gateway_detector = GatewayDetector(self.http_client)
         self.card_parser = CardParser()
@@ -211,7 +244,22 @@ class CheckoutAutomation:
     def initialize(self) -> bool:
         self.log(f"Initializing checkout automation for: {self.config.target_url}")
         
-        self.http_client.create_session()
+        # Start persistent session if enabled
+        if self.config.use_persistent_sessions and hasattr(self.http_client, 'start_checkout_session'):
+            proxy = None
+            if self.proxy_manager:
+                proxy = self.proxy_manager.get_proxy()
+            
+            self.current_checkout_session = self.http_client.start_checkout_session(
+                self.config.target_url,
+                platform="unknown",
+                gateway="unknown",
+                proxy=proxy
+            )
+            self.log(f"Session started: {self.current_checkout_session.session_id}")
+            self.log(f"Session file: {self.config.session_dir}/{self.current_checkout_session.session_id}.json")
+        else:
+            self.http_client.create_session()
         
         self.platform_type, platform_info = self.platform_detector.detect(self.config.target_url)
         self.log(f"Detected platform: {self.platform_type}")
@@ -716,6 +764,12 @@ class CheckoutAutomation:
         stats = self.logger.get_stats()
         self.log(f"Completed! Success: {stats['success']}, Failure: {stats['failure']}, Errors: {stats['errors']}")
         
+        # End persistent session
+        if self.config.use_persistent_sessions and hasattr(self.http_client, 'end_checkout_session'):
+            final_status = "success" if stats['success'] > 0 else "failed"
+            self.http_client.end_checkout_session(final_status)
+            self.log(f"Session ended with status: {final_status}")
+        
         return results
 
 
@@ -735,6 +789,9 @@ def main():
     parser.add_argument("--retries", type=int, default=3, help="Max retries per card")
     parser.add_argument("--delay", type=float, default=2.0, help="Delay between cards (seconds)")
     parser.add_argument("--log-dir", default="logs", help="Log directory")
+    parser.add_argument("--session-dir", default="sessions", help="Session storage directory")
+    parser.add_argument("--session-ttl", type=int, default=3600, help="Session TTL in seconds")
+    parser.add_argument("--no-persistent-sessions", action="store_true", help="Disable persistent sessions")
     parser.add_argument("--quiet", "-q", action="store_true", help="Quiet mode")
     
     args = parser.parse_args()
@@ -751,6 +808,9 @@ def main():
         max_retries=args.retries,
         delay_between_cards=args.delay,
         log_dir=args.log_dir,
+        session_dir=args.session_dir,
+        session_ttl=args.session_ttl,
+        use_persistent_sessions=not args.no_persistent_sessions,
         verbose=not args.quiet
     )
     

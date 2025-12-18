@@ -4,6 +4,7 @@ import string
 import base64
 import time
 import json
+import os
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 
@@ -30,6 +31,74 @@ class BrowserProfile:
     fonts: List[str]
 
 
+@dataclass
+class ExtendedBrowserFingerprint:
+    user_agent: str
+    accept_language: str
+    accept_encoding: str
+    platform: str
+    vendor: str
+    screen_width: int
+    screen_height: int
+    color_depth: int
+    pixel_ratio: float
+    timezone: str
+    timezone_offset: int
+    languages: List[str]
+    hardware_concurrency: int
+    device_memory: int
+    webgl_vendor: str
+    webgl_renderer: str
+    canvas_hash: str
+    audio_hash: str
+    fonts_hash: str
+    plugins_hash: str
+    do_not_track: Optional[str] = None
+    touch_support: bool = False
+    browser: str = "chrome"
+    version: str = "120.0.0.0"
+    viewport_width: int = 1920
+    viewport_height: int = 1080
+    plugins: List[Dict] = field(default_factory=list)
+    fonts: List[str] = field(default_factory=list)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "user_agent": self.user_agent,
+            "accept_language": self.accept_language,
+            "accept_encoding": self.accept_encoding,
+            "platform": self.platform,
+            "vendor": self.vendor,
+            "screen_width": self.screen_width,
+            "screen_height": self.screen_height,
+            "color_depth": self.color_depth,
+            "pixel_ratio": self.pixel_ratio,
+            "timezone": self.timezone,
+            "timezone_offset": self.timezone_offset,
+            "languages": self.languages,
+            "hardware_concurrency": self.hardware_concurrency,
+            "device_memory": self.device_memory,
+            "webgl_vendor": self.webgl_vendor,
+            "webgl_renderer": self.webgl_renderer,
+            "canvas_hash": self.canvas_hash,
+            "audio_hash": self.audio_hash,
+            "fonts_hash": self.fonts_hash,
+            "plugins_hash": self.plugins_hash,
+            "do_not_track": self.do_not_track,
+            "touch_support": self.touch_support,
+            "browser": self.browser,
+            "version": self.version,
+            "viewport_width": self.viewport_width,
+            "viewport_height": self.viewport_height,
+            "plugins": self.plugins,
+            "fonts": self.fonts
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ExtendedBrowserFingerprint":
+        return cls(**data)
+
+
 class BrowserFingerprintGenerator:
     def __init__(self):
         self.fingerprint_cache = {}
@@ -40,94 +109,189 @@ class BrowserFingerprintGenerator:
         return [
             {
                 "platform": "Windows",
-                "browser": "Chrome",
+                "browser": "chrome",
                 "version": "120.0.0.0",
                 "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 "viewport": (1920, 1080),
                 "webgl_vendor": "Google Inc. (ANGLE)",
                 "webgl_renderer": "ANGLE (Intel, Intel(R) UHD Graphics 620 Direct3D11 vs_5_0 ps_5_0, D3D11)",
                 "timezone": "America/New_York",
+                "timezone_offset": -300,
                 "language": "en-US",
                 "languages": ["en-US", "en"],
                 "screen_resolution": (1920, 1080),
                 "color_depth": 24,
+                "pixel_ratio": 1.0,
                 "device_memory": 8,
                 "hardware_concurrency": 8,
-                "fonts": ["Arial", "Verdana", "Times New Roman", "Courier New", "Georgia", "Palatino", "Garamond", "Trebuchet MS", "Impact", "Lucida Console", "Tahoma", "Segoe UI"]
+                "vendor": "Google Inc.",
+                "fonts": ["Arial", "Verdana", "Times New Roman", "Courier New", "Georgia", "Palatino", "Garamond", "Trebuchet MS", "Impact", "Lucida Console", "Tahoma", "Segoe UI"],
+                "accept_encoding": "gzip, deflate, br"
+            },
+            {
+                "platform": "Windows",
+                "browser": "chrome",
+                "version": "121.0.0.0",
+                "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+                "viewport": (1366, 768),
+                "webgl_vendor": "Google Inc. (ANGLE)",
+                "webgl_renderer": "ANGLE (NVIDIA, NVIDIA GeForce GTX 1650 Direct3D11 vs_5_0 ps_5_0, D3D11)",
+                "timezone": "America/Chicago",
+                "timezone_offset": -360,
+                "language": "en-US",
+                "languages": ["en-US", "en"],
+                "screen_resolution": (1366, 768),
+                "color_depth": 24,
+                "pixel_ratio": 1.0,
+                "device_memory": 16,
+                "hardware_concurrency": 12,
+                "vendor": "Google Inc.",
+                "fonts": ["Arial", "Verdana", "Times New Roman", "Courier New", "Georgia", "Trebuchet MS", "Impact", "Lucida Console", "Tahoma", "Segoe UI", "Calibri"],
+                "accept_encoding": "gzip, deflate, br"
             },
             {
                 "platform": "macOS",
-                "browser": "Chrome",
+                "browser": "chrome",
                 "version": "120.0.0.0",
                 "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 "viewport": (1440, 900),
                 "webgl_vendor": "Google Inc. (Apple)",
                 "webgl_renderer": "ANGLE (Apple, Apple M1, OpenGL 4.1)",
                 "timezone": "America/Los_Angeles",
+                "timezone_offset": -480,
                 "language": "en-US",
                 "languages": ["en-US", "en"],
                 "screen_resolution": (2560, 1600),
                 "color_depth": 30,
+                "pixel_ratio": 2.0,
                 "device_memory": 16,
                 "hardware_concurrency": 8,
-                "fonts": ["Arial", "Helvetica", "Times New Roman", "Courier New", "Georgia", "Palatino", "Trebuchet MS", "Lucida Grande", "Monaco", "Menlo"]
+                "vendor": "Google Inc.",
+                "fonts": ["Arial", "Helvetica", "Times New Roman", "Courier New", "Georgia", "Palatino", "Trebuchet MS", "Lucida Grande", "Monaco", "Menlo"],
+                "accept_encoding": "gzip, deflate, br"
             },
             {
                 "platform": "Windows",
-                "browser": "Firefox",
+                "browser": "firefox",
                 "version": "121.0",
                 "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
                 "viewport": (1920, 1080),
                 "webgl_vendor": "Intel Inc.",
                 "webgl_renderer": "Intel(R) UHD Graphics 620",
                 "timezone": "Europe/London",
+                "timezone_offset": 0,
                 "language": "en-GB",
                 "languages": ["en-GB", "en"],
                 "screen_resolution": (1920, 1080),
                 "color_depth": 24,
+                "pixel_ratio": 1.0,
                 "device_memory": 8,
                 "hardware_concurrency": 4,
-                "fonts": ["Arial", "Verdana", "Times New Roman", "Courier New", "Georgia", "Trebuchet MS", "Impact", "Lucida Console", "Tahoma"]
+                "vendor": "",
+                "fonts": ["Arial", "Verdana", "Times New Roman", "Courier New", "Georgia", "Trebuchet MS", "Impact", "Lucida Console", "Tahoma"],
+                "accept_encoding": "gzip, deflate, br"
             },
             {
                 "platform": "Windows",
-                "browser": "Edge",
+                "browser": "firefox",
+                "version": "122.0",
+                "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0",
+                "viewport": (1536, 864),
+                "webgl_vendor": "NVIDIA Corporation",
+                "webgl_renderer": "NVIDIA GeForce RTX 3060/PCIe/SSE2",
+                "timezone": "America/New_York",
+                "timezone_offset": -300,
+                "language": "en-US",
+                "languages": ["en-US", "en"],
+                "screen_resolution": (1536, 864),
+                "color_depth": 24,
+                "pixel_ratio": 1.25,
+                "device_memory": 32,
+                "hardware_concurrency": 16,
+                "vendor": "",
+                "fonts": ["Arial", "Verdana", "Times New Roman", "Courier New", "Georgia", "Trebuchet MS", "Impact", "Lucida Console", "Tahoma", "Segoe UI"],
+                "accept_encoding": "gzip, deflate, br"
+            },
+            {
+                "platform": "Windows",
+                "browser": "edge",
                 "version": "120.0.0.0",
                 "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
                 "viewport": (1920, 1080),
                 "webgl_vendor": "Google Inc. (ANGLE)",
                 "webgl_renderer": "ANGLE (NVIDIA, NVIDIA GeForce GTX 1660 Direct3D11 vs_5_0 ps_5_0, D3D11)",
                 "timezone": "America/Chicago",
+                "timezone_offset": -360,
                 "language": "en-US",
                 "languages": ["en-US", "en"],
                 "screen_resolution": (2560, 1440),
                 "color_depth": 24,
+                "pixel_ratio": 1.0,
                 "device_memory": 16,
                 "hardware_concurrency": 12,
-                "fonts": ["Arial", "Verdana", "Times New Roman", "Courier New", "Georgia", "Palatino", "Trebuchet MS", "Impact", "Lucida Console", "Tahoma", "Segoe UI", "Calibri"]
+                "vendor": "Google Inc.",
+                "fonts": ["Arial", "Verdana", "Times New Roman", "Courier New", "Georgia", "Palatino", "Trebuchet MS", "Impact", "Lucida Console", "Tahoma", "Segoe UI", "Calibri"],
+                "accept_encoding": "gzip, deflate, br"
             },
             {
                 "platform": "macOS",
-                "browser": "Safari",
+                "browser": "safari",
                 "version": "17.0",
                 "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
                 "viewport": (1440, 900),
                 "webgl_vendor": "Apple Inc.",
                 "webgl_renderer": "Apple M1 Pro",
                 "timezone": "America/Los_Angeles",
+                "timezone_offset": -480,
                 "language": "en-US",
                 "languages": ["en-US", "en"],
                 "screen_resolution": (3024, 1964),
                 "color_depth": 30,
+                "pixel_ratio": 2.0,
                 "device_memory": 32,
                 "hardware_concurrency": 10,
-                "fonts": ["Arial", "Helvetica", "Times New Roman", "Courier New", "Georgia", "Palatino", "Trebuchet MS", "Lucida Grande", "Monaco", "Menlo", "SF Pro"]
+                "vendor": "Apple Computer, Inc.",
+                "fonts": ["Arial", "Helvetica", "Times New Roman", "Courier New", "Georgia", "Palatino", "Trebuchet MS", "Lucida Grande", "Monaco", "Menlo", "SF Pro"],
+                "accept_encoding": "gzip, deflate, br"
+            },
+            {
+                "platform": "macOS",
+                "browser": "safari",
+                "version": "17.2",
+                "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_2) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
+                "viewport": (1512, 982),
+                "webgl_vendor": "Apple Inc.",
+                "webgl_renderer": "Apple M2",
+                "timezone": "America/New_York",
+                "timezone_offset": -300,
+                "language": "en-US",
+                "languages": ["en-US", "en"],
+                "screen_resolution": (3024, 1964),
+                "color_depth": 30,
+                "pixel_ratio": 2.0,
+                "device_memory": 24,
+                "hardware_concurrency": 8,
+                "vendor": "Apple Computer, Inc.",
+                "fonts": ["Arial", "Helvetica", "Times New Roman", "Courier New", "Georgia", "Palatino", "Trebuchet MS", "Lucida Grande", "Monaco", "Menlo", "SF Pro", "SF Mono"],
+                "accept_encoding": "gzip, deflate, br"
             }
         ]
     
     def _generate_canvas_hash(self, browser: str) -> str:
-        seed = f"{browser}_{random.random()}"
+        seed = f"{browser}_{random.random()}_{time.time()}"
         return hashlib.sha256(seed.encode()).hexdigest()[:32]
+    
+    def _generate_audio_hash(self, browser: str) -> str:
+        seed = f"audio_{browser}_{random.random()}"
+        return hashlib.md5(seed.encode()).hexdigest()[:16]
+    
+    def _generate_fonts_hash(self, fonts: List[str]) -> str:
+        fonts_str = ",".join(sorted(fonts))
+        return hashlib.md5(fonts_str.encode()).hexdigest()[:16]
+    
+    def _generate_plugins_hash(self, plugins: List[Dict]) -> str:
+        plugins_str = json.dumps(plugins, sort_keys=True)
+        return hashlib.md5(plugins_str.encode()).hexdigest()[:16]
     
     def _generate_audio_context(self) -> float:
         return random.uniform(124.0, 124.1)
@@ -140,17 +304,92 @@ class BrowserFingerprintGenerator:
         ]
         firefox_plugins = []
         safari_plugins = []
+        edge_plugins = [
+            {"name": "Microsoft Edge PDF Plugin", "filename": "internal-pdf-viewer", "description": "Portable Document Format"},
+            {"name": "Microsoft Edge PDF Viewer", "filename": "mhjfbmdgcfjbbpaeojofohoefgiehjai", "description": ""}
+        ]
         
-        if browser in ["Chrome", "Edge"]:
+        if browser == "chrome":
             return chrome_plugins
-        elif browser == "Firefox":
+        elif browser == "firefox":
             return firefox_plugins
-        else:
+        elif browser == "safari":
             return safari_plugins
+        elif browser == "edge":
+            return edge_plugins
+        return chrome_plugins
     
-    def generate_fingerprint(self, session_id: Optional[str] = None) -> BrowserProfile:
+    def generate_fingerprint(self, browser: str = None, session_id: Optional[str] = None) -> ExtendedBrowserFingerprint:
         if session_id and session_id in self.fingerprint_cache:
             return self.fingerprint_cache[session_id]
+        
+        if browser:
+            matching_fps = [fp for fp in self.real_fingerprints if fp["browser"] == browser]
+            base = random.choice(matching_fps) if matching_fps else random.choice(self.real_fingerprints)
+        else:
+            base = random.choice(self.real_fingerprints)
+        
+        plugins = self._generate_plugins(base["browser"])
+        
+        fingerprint = ExtendedBrowserFingerprint(
+            user_agent=base["user_agent"],
+            accept_language=",".join(base["languages"]) + ";q=0.9",
+            accept_encoding=base["accept_encoding"],
+            platform=base["platform"],
+            vendor=base["vendor"],
+            screen_width=base["screen_resolution"][0],
+            screen_height=base["screen_resolution"][1],
+            color_depth=base["color_depth"],
+            pixel_ratio=base["pixel_ratio"],
+            timezone=base["timezone"],
+            timezone_offset=base["timezone_offset"],
+            languages=base["languages"],
+            hardware_concurrency=base["hardware_concurrency"],
+            device_memory=base["device_memory"],
+            webgl_vendor=base["webgl_vendor"],
+            webgl_renderer=base["webgl_renderer"],
+            canvas_hash=self._generate_canvas_hash(base["browser"]),
+            audio_hash=self._generate_audio_hash(base["browser"]),
+            fonts_hash=self._generate_fonts_hash(base["fonts"]),
+            plugins_hash=self._generate_plugins_hash(plugins),
+            do_not_track=random.choice([None, "1"]),
+            touch_support=False,
+            browser=base["browser"],
+            version=base["version"],
+            viewport_width=base["viewport"][0],
+            viewport_height=base["viewport"][1],
+            plugins=plugins,
+            fonts=base["fonts"]
+        )
+        
+        if session_id:
+            self.fingerprint_cache[session_id] = fingerprint
+        
+        return fingerprint
+    
+    def generate_legacy_profile(self, session_id: Optional[str] = None) -> BrowserProfile:
+        if session_id and session_id in self.fingerprint_cache:
+            fp = self.fingerprint_cache[session_id]
+            return BrowserProfile(
+                platform=fp.platform,
+                browser=fp.browser,
+                version=fp.version,
+                user_agent=fp.user_agent,
+                viewport=(fp.viewport_width, fp.viewport_height),
+                webgl_vendor=fp.webgl_vendor,
+                webgl_renderer=fp.webgl_renderer,
+                canvas_hash=fp.canvas_hash,
+                audio_context=self._generate_audio_context(),
+                timezone=fp.timezone,
+                language=fp.languages[0] if fp.languages else "en-US",
+                languages=fp.languages,
+                screen_resolution=(fp.screen_width, fp.screen_height),
+                color_depth=fp.color_depth,
+                device_memory=fp.device_memory,
+                hardware_concurrency=fp.hardware_concurrency,
+                plugins=fp.plugins,
+                fonts=fp.fonts
+            )
         
         base = random.choice(self.real_fingerprints)
         
@@ -222,6 +461,23 @@ class CookieGenerator:
             "bm_sv": f"{self._random_base64(200)}~{self._random_hex(8)}~{timestamp}"
         }
     
+    def generate_datadome_cookies(self) -> Dict[str, str]:
+        timestamp = int(time.time() * 1000)
+        
+        return {
+            "datadome": self._random_base64(100),
+            "dd_cookie_test": f"{timestamp}"
+        }
+    
+    def generate_perimeterx_cookies(self) -> Dict[str, str]:
+        timestamp = int(time.time() * 1000)
+        
+        return {
+            "_px3": self._random_base64(200),
+            "_pxvid": f"{self._random_hex(8)}-{self._random_hex(4)}-{self._random_hex(4)}-{self._random_hex(4)}-{self._random_hex(12)}",
+            "_pxhd": self._random_base64(100)
+        }
+    
     def generate_analytics_cookies(self) -> Dict[str, str]:
         timestamp = int(time.time() * 1000)
         base_time = timestamp - random.randint(0, 2592000000)
@@ -254,15 +510,28 @@ class CookieGenerator:
             "checkout_token": self._random_hex(32)
         }
     
-    def generate_all_cookies(self, hostname: str, session_id: str) -> str:
+    def generate_all_cookies(self, hostname: str, session_id: str, 
+                              include_protection: bool = True) -> str:
         all_cookies = {}
-        all_cookies.update(self.generate_cloudflare_cookies(hostname, session_id))
-        all_cookies.update(self.generate_akamai_cookies())
+        
+        if include_protection:
+            all_cookies.update(self.generate_cloudflare_cookies(hostname, session_id))
+            all_cookies.update(self.generate_akamai_cookies())
+            all_cookies.update(self.generate_datadome_cookies())
+            all_cookies.update(self.generate_perimeterx_cookies())
+        
         all_cookies.update(self.generate_analytics_cookies())
         all_cookies.update(self.generate_consent_cookies())
         all_cookies.update(self.generate_session_cookies())
         
         return "; ".join([f"{k}={v}" for k, v in all_cookies.items()])
+    
+    def generate_minimal_cookies(self, hostname: str, session_id: str) -> str:
+        cookies = {}
+        cookies.update(self.generate_analytics_cookies())
+        cookies.update(self.generate_consent_cookies())
+        
+        return "; ".join([f"{k}={v}" for k, v in cookies.items()])
 
 
 class SessionManager:
@@ -271,11 +540,12 @@ class SessionManager:
         self.fingerprint_generator = BrowserFingerprintGenerator()
         self.cookie_generator = CookieGenerator()
         
-    def create_session(self, session_id: Optional[str] = None) -> Dict[str, Any]:
+    def create_session(self, session_id: Optional[str] = None, 
+                       browser: str = None) -> Dict[str, Any]:
         if session_id is None:
             session_id = self._generate_session_id()
         
-        fingerprint = self.fingerprint_generator.generate_fingerprint(session_id)
+        fingerprint = self.fingerprint_generator.generate_fingerprint(browser, session_id)
         
         session = {
             "id": session_id,
@@ -284,7 +554,8 @@ class SessionManager:
             "last_activity": time.time(),
             "request_count": 0,
             "cookies": {},
-            "history": []
+            "history": [],
+            "browser": fingerprint.browser
         }
         
         self.sessions[session_id] = session
@@ -316,8 +587,8 @@ class SessionManager:
         headers = {
             "User-Agent": fp.user_agent,
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-            "Accept-Language": ",".join(fp.languages) + ";q=0.9",
-            "Accept-Encoding": "gzip, deflate, br",
+            "Accept-Language": fp.accept_language,
+            "Accept-Encoding": fp.accept_encoding,
             "Connection": "keep-alive",
             "Upgrade-Insecure-Requests": "1",
             "Sec-Fetch-Dest": "document",
@@ -327,8 +598,12 @@ class SessionManager:
             "Cache-Control": "max-age=0"
         }
         
-        if fp.browser == "Chrome" or fp.browser == "Edge":
-            headers["sec-ch-ua"] = f'"Not_A Brand";v="8", "Chromium";v="{fp.version.split(".")[0]}", "Google Chrome";v="{fp.version.split(".")[0]}"'
+        if fp.browser in ["chrome", "edge"]:
+            version = fp.version.split(".")[0]
+            if fp.browser == "chrome":
+                headers["sec-ch-ua"] = f'"Not_A Brand";v="8", "Chromium";v="{version}", "Google Chrome";v="{version}"'
+            else:
+                headers["sec-ch-ua"] = f'"Not_A Brand";v="8", "Chromium";v="{version}", "Microsoft Edge";v="{version}"'
             headers["sec-ch-ua-mobile"] = "?0"
             headers["sec-ch-ua-platform"] = f'"{fp.platform}"'
         
@@ -341,6 +616,47 @@ class SessionManager:
     def destroy_session(self, session_id: str):
         if session_id in self.sessions:
             del self.sessions[session_id]
+    
+    def export_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+        session = self.get_session(session_id)
+        if not session:
+            return None
+        
+        fp = session["fingerprint"]
+        
+        return {
+            "id": session["id"],
+            "fingerprint": fp.to_dict() if hasattr(fp, 'to_dict') else None,
+            "created_at": session["created_at"],
+            "last_activity": session["last_activity"],
+            "request_count": session["request_count"],
+            "cookies": session["cookies"],
+            "history": session["history"],
+            "browser": session.get("browser")
+        }
+    
+    def import_session(self, session_data: Dict[str, Any]) -> str:
+        session_id = session_data["id"]
+        
+        fp_data = session_data.get("fingerprint")
+        if fp_data:
+            fingerprint = ExtendedBrowserFingerprint.from_dict(fp_data)
+        else:
+            fingerprint = self.fingerprint_generator.generate_fingerprint(session_id=session_id)
+        
+        session = {
+            "id": session_id,
+            "fingerprint": fingerprint,
+            "created_at": session_data.get("created_at", time.time()),
+            "last_activity": session_data.get("last_activity", time.time()),
+            "request_count": session_data.get("request_count", 0),
+            "cookies": session_data.get("cookies", {}),
+            "history": session_data.get("history", []),
+            "browser": session_data.get("browser")
+        }
+        
+        self.sessions[session_id] = session
+        return session_id
 
 
 class WebGLFingerprint:
