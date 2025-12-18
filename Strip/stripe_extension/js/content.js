@@ -848,14 +848,16 @@
             bottom: 20px;
             left: 20px;
             background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            border: 1px solid rgba(99, 91, 255, 0.5);
-            border-radius: 12px;
-            padding: 15px;
-            min-width: 180px;
+            border: 2px solid rgba(99, 91, 255, 0.6);
+            border-radius: 16px;
+            padding: 20px;
+            min-width: 320px;
+            max-width: 380px;
             z-index: 999998;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            box-shadow: 0 4px 20px rgba(99, 91, 255, 0.3);
+            box-shadow: 0 8px 32px rgba(99, 91, 255, 0.4), 0 0 60px rgba(99, 91, 255, 0.2);
             color: white;
+            backdrop-filter: blur(10px);
         `;
         
         const style = document.createElement('style');
@@ -889,13 +891,15 @@
             #stripe-toolkit-panel .stp-proxy-info { display: flex; justify-content: space-between; margin-bottom: 10px; padding: 6px 8px; background: rgba(0,0,0,0.2); border-radius: 4px; }
             #stripe-toolkit-panel .stp-proxy-label { font-size: 10px; color: #9ca3af; }
             #stripe-toolkit-panel .stp-proxy-value { font-size: 10px; color: #f59e0b; font-family: monospace; }
-            #stripe-toolkit-panel .stp-controls { display: flex; gap: 6px; flex-wrap: wrap; }
-            #stripe-toolkit-panel .stp-btn { padding: 6px 10px; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; transition: all 0.2s; flex: 1; min-width: 60px; }
-            #stripe-toolkit-panel .stp-btn.start { background: #22c55e; color: white; }
-            #stripe-toolkit-panel .stp-btn.stop { background: #ef4444; color: white; }
-            #stripe-toolkit-panel .stp-btn.refresh { background: #f59e0b; color: white; }
-            #stripe-toolkit-panel .stp-btn.settings { background: #635bff; color: white; }
-            #stripe-toolkit-panel .stp-btn:hover { opacity: 0.9; transform: scale(1.02); }
+            #stripe-toolkit-panel .stp-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+            #stripe-toolkit-panel .stp-btn { padding: 14px 18px; border: none; border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.3s; display: flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+            #stripe-toolkit-panel .stp-btn.start { background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); color: white; grid-column: 1 / 2; }
+            #stripe-toolkit-panel .stp-btn.stop { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; grid-column: 2 / 3; }
+            #stripe-toolkit-panel .stp-btn.refresh { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; }
+            #stripe-toolkit-panel .stp-btn.settings { background: linear-gradient(135deg, #635bff 0%, #4f46e5 100%); color: white; }
+            #stripe-toolkit-panel .stp-btn:hover { opacity: 0.95; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+            #stripe-toolkit-panel .stp-btn:active { transform: translateY(0); box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+            #stripe-toolkit-panel .stp-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
             @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         `;
         document.head.appendChild(style);
@@ -1101,20 +1105,22 @@
     }
     
     function autoFillBillingDetails() {
-        chrome.storage.local.get(['autofillData'], (data) => {
+        chrome.storage.local.get(['autofillData', 'email'], (data) => {
             const autofill = data.autofillData || {
-                email: 'test@example.com',
                 name: 'John Doe',
                 country: 'US'
             };
             
+            // Use email from settings if available
+            const email = data.email || autofill.email || 'test@example.com';
+            
             // Fill email
-            const emailSelectors = ['input[type="email"]', 'input[name="email"]', 'input[autocomplete="email"]'];
+            const emailSelectors = ['input[type="email"]', 'input[name="email"]', 'input[autocomplete="email"]', 'input[placeholder*="email" i]'];
             for (const sel of emailSelectors) {
                 const el = document.querySelector(sel);
                 if (el && !el.value) {
-                    simulateInput(el, autofill.email);
-                    log('Auto-filled email:', autofill.email);
+                    simulateInput(el, email);
+                    log('Auto-filled email:', email);
                     break;
                 }
             }
@@ -1165,10 +1171,11 @@
             // Save checkout log
             saveCheckoutLog(checkoutInfo);
             
-            // Auto-fill billing details
-            if (config.autoFillEmail || config.autoFillName) {
-                setTimeout(autoFillBillingDetails, 1000);
-            }
+            // Auto-fill billing details - always trigger
+            setTimeout(() => {
+                autoFillBillingDetails();
+                log('Auto-fill triggered on checkout detection');
+            }, 1500);
         }
 
         const observer = new MutationObserver((mutations) => {

@@ -330,6 +330,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             sendResponse({ success: true });
             break;
             
+        case 'startProcessing':
+            console.log('[BACKGROUND] Start processing requested');
+            currentSession.isProcessing = true;
+            processNextCard(tabId);
+            sendResponse({ success: true });
+            break;
+            
+        case 'stopProcessing':
+            console.log('[BACKGROUND] Stop processing requested');
+            currentSession.isProcessing = false;
+            sendResponse({ success: true });
+            break;
+            
         case 'nextCard':
             processNextCard(tabId);
             break;
@@ -442,6 +455,12 @@ function handleCardResult(tabId, result) {
 }
 
 async function processNextCard(tabId) {
+    // Check if processing is stopped
+    if (!currentSession.isProcessing) {
+        console.log('[BACKGROUND] Processing stopped by user');
+        return;
+    }
+    
     // Refresh session before next card
     if (settings.refreshOnProxy) {
         await refreshSession(tabId, settings.proxyEnabled);
@@ -453,6 +472,7 @@ async function processNextCard(tabId) {
         
         if (index >= cards.length) {
             console.log('[BACKGROUND] All cards processed');
+            currentSession.isProcessing = false;
             chrome.tabs.sendMessage(tabId, { action: 'allCardsProcessed' });
             return;
         }
