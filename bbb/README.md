@@ -1,6 +1,6 @@
 # Braintree Payment Processor (Enhanced)
 
-An improved, robust Braintree payment processor with multi-site support, enhanced error handling, and comprehensive configuration management.
+An improved, robust Braintree payment processor with multi-site support, enhanced error handling, and comprehensive configuration management including advanced GraphQL tokenization.
 
 ## Features
 
@@ -8,10 +8,43 @@ An improved, robust Braintree payment processor with multi-site support, enhance
 - ✅ **Multi-Site Support**: Site-specific configurations via JSON
 - ✅ **Smart Retry Logic**: Exponential backoff with circuit breaker pattern
 - ✅ **Improved Nonce Extraction**: Multiple fallback patterns for reliability
-- ✅ **Structured Logging**: Detailed logs with performance metrics
+- ✅ **Advanced GraphQL Tokenization**: Enhanced Braintree API integration with detailed response parsing
+- ✅ **Structured Logging**: Detailed logs with performance metrics and BIN data
 - ✅ **Session Management**: Improved cookie handling and state management
 - ✅ **Progress Tracking**: Real-time progress for batch operations
 - ✅ **Site Compatibility**: Auto-detection of payment gateway types
+
+## GraphQL Tokenization Enhancements
+
+The processor now includes advanced GraphQL tokenization features:
+
+### Key Improvements
+
+1. **Site-Specific GraphQL Retries**: Configure retry counts per site via `graphql_retries` in config.json
+2. **Detailed Response Analysis**: Extracts comprehensive card information including:
+   - Token and brand code
+   - BIN (Bank Identification Number)
+   - Card type (Debit/Credit)
+   - Issuing bank and country
+   - Card properties (prepaid, commercial, healthcare)
+
+3. **Smart Error Handling**:
+   - Distinguishes between validation errors (no retry) and transient errors (retry)
+   - Exponential backoff for network failures
+   - Detailed GraphQL error extraction and logging
+
+4. **Multiple Extraction Methods**:
+   - Primary: JSON structure parsing
+   - Fallback: Regex pattern extraction
+   - BIN-based brand detection when brand code unavailable
+
+### Example GraphQL Response Analysis
+
+```python
+# Successful tokenization logs:
+Card tokenized successfully: 540385******2766 → Token: abc123xyz...7890 (Brand: master-card)
+Card type: Debit, Bank: Chase Bank, Country: USA
+```
 
 ## Installation
 
@@ -42,7 +75,7 @@ python bbb_final.py
 
 #### Site Configuration (`config.json`)
 
-Each site can have custom settings:
+Each site can have custom settings including GraphQL retry configuration:
 
 ```json
 {
@@ -51,6 +84,7 @@ Each site can have custom settings:
       "enabled": true,
       "retry_strategy": "aggressive",
       "max_retries": 5,
+      "graphql_retries": 3,
       "requires_billing": true,
       "payment_gateway": "braintree",
       "delays": {
@@ -61,6 +95,12 @@ Each site can have custom settings:
   }
 }
 ```
+
+**Configuration Options:**
+- `graphql_retries`: Number of retry attempts for Braintree GraphQL tokenization (default: 3)
+- `max_retries`: General retry attempts for HTTP requests
+- `retry_strategy`: Named strategy for retry behavior
+- `delays`: Custom timing between operations
 
 #### Retry Strategies
 
@@ -201,7 +241,8 @@ tail -f braintree_processor.log
 |--------|------|---------|-------------|
 | `enabled` | boolean | true | Enable/disable site |
 | `retry_strategy` | string | "normal" | Retry strategy name |
-| `max_retries` | integer | 3 | Maximum retry attempts |
+| `max_retries` | integer | 3 | Maximum retry attempts for HTTP requests |
+| `graphql_retries` | integer | 3 | Maximum retry attempts for GraphQL tokenization |
 | `timeout` | integer | 30 | Request timeout (seconds) |
 | `requires_billing` | boolean | true | Update billing address |
 | `payment_gateway` | string | "braintree" | Expected gateway type |
@@ -217,6 +258,7 @@ Global defaults are applied when site-specific settings are not provided:
   "defaults": {
     "retry_strategy": "normal",
     "max_retries": 3,
+    "graphql_retries": 3,
     "timeout": 30,
     "requires_billing": true,
     "payment_gateway": "braintree"

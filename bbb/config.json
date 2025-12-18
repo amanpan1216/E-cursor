@@ -4,6 +4,7 @@
       "enabled": true,
       "retry_strategy": "normal",
       "max_retries": 3,
+      "graphql_retries": 3,
       "requires_billing": true,
       "payment_gateway": "braintree",
       "delays": {
@@ -15,6 +16,7 @@
       "enabled": true,
       "retry_strategy": "normal",
       "max_retries": 3,
+      "graphql_retries": 3,
       "requires_billing": true,
       "payment_gateway": "braintree",
       "delays": {
@@ -26,6 +28,7 @@
       "enabled": true,
       "retry_strategy": "normal",
       "max_retries": 3,
+      "graphql_retries": 3,
       "requires_billing": true,
       "payment_gateway": "braintree",
       "delays": {
@@ -42,7 +45,8 @@
       "delays": {
         "between_requests": 2.0,
         "after_registration": 3.0
-      }
+      },
+      "graphql_retries": 3
     },
     "lindywell.com": {
       "enabled": true,
@@ -53,7 +57,8 @@
       "delays": {
         "between_requests": 2.0,
         "after_registration": 3.0
-      }
+      },
+      "graphql_retries": 3
     },
     "naturalacneclinic.com": {
       "enabled": true,
@@ -64,7 +69,8 @@
       "delays": {
         "between_requests": 2.0,
         "after_registration": 3.0
-      }
+      },
+      "graphql_retries": 3
     },
     "perennialsfabrics.com": {
       "enabled": true,
@@ -75,7 +81,8 @@
       "delays": {
         "between_requests": 2.0,
         "after_registration": 3.0
-      }
+      },
+      "graphql_retries": 3
     },
     "shop.bullfrogspas.com": {
       "enabled": true,
@@ -86,7 +93,8 @@
       "delays": {
         "between_requests": 2.0,
         "after_registration": 3.0
-      }
+      },
+      "graphql_retries": 3
     },
     "store.puritywoods.com": {
       "enabled": true,
@@ -97,7 +105,8 @@
       "delays": {
         "between_requests": 2.0,
         "after_registration": 3.0
-      }
+      },
+      "graphql_retries": 3
     },
     "strymon.net": {
       "enabled": true,
@@ -108,7 +117,8 @@
       "delays": {
         "between_requests": 2.0,
         "after_registration": 3.0
-      }
+      },
+      "graphql_retries": 3
     },
     "truedark.com": {
       "enabled": true,
@@ -119,7 +129,8 @@
       "delays": {
         "between_requests": 2.0,
         "after_registration": 3.0
-      }
+      },
+      "graphql_retries": 3
     },
     "winixamerica.com": {
       "enabled": true,
@@ -130,7 +141,8 @@
       "delays": {
         "between_requests": 2.0,
         "after_registration": 3.0
-      }
+      },
+      "graphql_retries": 3
     }
   },
   "defaults": {
@@ -142,7 +154,8 @@
     "delays": {
       "between_requests": 2.0,
       "after_registration": 3.0
-    }
+    },
+    "graphql_retries": 3
   },
   "retry_strategies": {
     "_comment": "These define named retry strategy templates. Site-level max_retries will override strategy max_retries if specified.",

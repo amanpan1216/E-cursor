@@ -38,6 +38,7 @@ class SiteConfig:
         self.enabled = config_dict.get('enabled', True)
         self.retry_strategy = config_dict.get('retry_strategy', defaults.get('retry_strategy', 'normal'))
         self.max_retries = config_dict.get('max_retries', defaults.get('max_retries', 3))
+        self.graphql_retries = config_dict.get('graphql_retries', defaults.get('graphql_retries', 3))
         self.timeout = config_dict.get('timeout', defaults.get('timeout', 30))
         self.requires_billing = config_dict.get('requires_billing', defaults.get('requires_billing', True))
         self.payment_gateway = config_dict.get('payment_gateway', defaults.get('payment_gateway', 'braintree'))
@@ -1504,26 +1505,88 @@ async def get_braintree_authorization_token(session: aiohttp.ClientSession, url:
     
     raise TokenError("No Braintree client token method found")
 
+def analyze_graphql_response(response_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Analyze and extract detailed information from Braintree GraphQL response.
+    
+    This helper function parses the GraphQL response and extracts all relevant
+    card and tokenization data for logging and debugging purposes.
+    
+    Args:
+        response_data: Parsed JSON response from Braintree GraphQL API
+        
+    Returns:
+        Dictionary with extracted data including token, brand, BIN info, etc.
+    """
+    result = {
+        'token': None,
+        'brand_code': None,
+        'bin': None,
+        'last4': None,
+        'card_type': None,
+        'issuing_bank': None,
+        'country': None,
+        'errors': []
+    }
+    
+    # Extract errors if present
+    if "errors" in response_data:
+        result['errors'] = [err.get("message", str(err)) for err in response_data["errors"]]
+    
+    # Extract data from successful response
+    if "data" in response_data:
+        tokenize_data = response_data.get("data", {}).get("tokenizeCreditCard", {})
+        
+        # Extract token
+        result['token'] = tokenize_data.get("token")
+        
+        # Extract credit card details
+        credit_card = tokenize_data.get("creditCard", {})
+        result['brand_code'] = credit_card.get("brandCode")
+        result['bin'] = credit_card.get("bin")
+        result['last4'] = credit_card.get("last4")
+        
+        # Extract BIN data
+        bin_data = credit_card.get("binData", {})
+        if bin_data:
+            result['card_type'] = "Debit" if bin_data.get("debit") == "Yes" else "Credit"
+            result['issuing_bank'] = bin_data.get("issuingBank")
+            result['country'] = bin_data.get("countryOfIssuance")
+            result['is_prepaid'] = bin_data.get("prepaid") == "Yes"
+            result['is_commercial'] = bin_data.get("commercial") == "Yes"
+            result['is_healthcare'] = bin_data.get("healthcare") == "Yes"
+    
+    return result
+
 async def tokenize_card_with_braintree(session: aiohttp.ClientSession, 
                                        card: CardDetails,
-                                       auth_fingerprint: str) -> Tuple[str, str]:
+                                       auth_fingerprint: str,
+                                       max_retries: int = 3) -> Tuple[str, str]:
     """
-    Tokenize credit card with Braintree API.
+    Tokenize credit card with Braintree GraphQL API with enhanced error handling.
+    
+    This function uses Braintree's GraphQL mutation to tokenize a credit card.
+    It includes comprehensive error handling, retry logic, and detailed response parsing.
     
     Args:
         session: aiohttp client session
-        card: Card details
-        auth_fingerprint: Authorization fingerprint
+        card: Card details to tokenize
+        auth_fingerprint: Authorization fingerprint from Braintree client token
+        max_retries: Maximum number of retry attempts (default: 3)
         
     Returns:
-        Tuple of (token, brand_code)
+        Tuple of (payment_token, brand_code)
         
     Raises:
-        TokenError: If tokenization fails
+        TokenError: If tokenization fails after all retries
+        ValidationError: If card data is invalid
     """
+    # Prepare Braintree-specific headers
     braintree_headers = Config.BRAINTREE_HEADERS.copy()
     braintree_headers["authorization"] = f"Bearer {auth_fingerprint}"
 
+    # Enhanced GraphQL mutation with comprehensive field selection
+    # This query requests all available data from Braintree for better debugging
     graphql_query = (
         "mutation TokenizeCreditCard($input: TokenizeCreditCardInput!) {"
         "  tokenizeCreditCard(input: $input) {"
@@ -1551,6 +1614,7 @@ async def tokenize_card_with_braintree(session: aiohttp.ClientSession,
         "}"
     )
     
+    # Prepare GraphQL payload with client metadata
     payload = {
         "clientSdkMetadata": {
             "source": "client",
@@ -1574,37 +1638,144 @@ async def tokenize_card_with_braintree(session: aiohttp.ClientSession,
         "operationName": "TokenizeCreditCard",
     }
 
-    logger.debug(f"Tokenizing card: {card.masked_number()}")
+    logger.info(f"Tokenizing card via Braintree GraphQL: {card.masked_number()}")
     
-    try:
-        async with session.post(
-            "https://payments.braintree-api.com/graphql",
-            headers=braintree_headers,
-            json=payload
-        ) as response:
-            if response.status != 200:
-                error_msg = f"NONCE_FETCH_FAILED: HTTP {response.status}"
-                logger.error(error_msg)
-                raise TokenError(error_msg)
+    # Retry loop for network errors
+    last_error = None
+    for attempt in range(max_retries):
+        try:
+            logger.debug(f"Tokenization attempt {attempt + 1}/{max_retries}")
             
-            text = await response.text()
-            token = extract_with_regex('token', text)
-            brand_code = extract_with_regex('brand_code', text)
+            async with session.post(
+                "https://payments.braintree-api.com/graphql",
+                headers=braintree_headers,
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=30)
+            ) as response:
+                response_text = await response.text()
+                
+                # Handle HTTP errors
+                if response.status != 200:
+                    error_msg = f"Braintree API returned HTTP {response.status}"
+                    logger.error(f"{error_msg}: {response_text[:200]}")
+                    
+                    # Don't retry on client errors (4xx)
+                    if 400 <= response.status < 500:
+                        raise TokenError(f"{error_msg} - Client error, not retrying")
+                    
+                    # Retry on server errors (5xx)
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(1 * (attempt + 1))  # Exponential backoff
+                        continue
+                    raise TokenError(error_msg)
+                
+                # Parse JSON response
+                try:
+                    response_json = json.loads(response_text)
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse Braintree response as JSON: {str(e)}")
+                    logger.debug(f"Response text: {response_text[:500]}")
+                    raise TokenError("Invalid JSON response from Braintree")
+                
+                # Analyze GraphQL response using helper function
+                analysis = analyze_graphql_response(response_json)
+                
+                # Check for GraphQL errors
+                if analysis['errors']:
+                    error_summary = "; ".join(analysis['errors'])
+                    logger.error(f"GraphQL errors: {error_summary}")
+                    
+                    # Check if errors are validation errors (don't retry)
+                    error_summary_lower = error_summary.lower()
+                    if any(keyword in error_summary_lower for keyword in 
+                           ['invalid', 'expired', 'declined', 'validation', 'cvv', 'card number']):
+                        raise ValidationError(f"Card validation failed: {error_summary}")
+                    
+                    # For other errors, retry
+                    if attempt < max_retries - 1:
+                        logger.debug(f"Retrying after GraphQL error...")
+                        await asyncio.sleep(1 * (attempt + 1))
+                        continue
+                    raise TokenError(f"GraphQL error: {error_summary}")
+                
+                # Extract token and brand from analysis
+                token = analysis['token']
+                brand_code = analysis['brand_code']
+                
+                # Log detailed card information if available
+                if analysis['card_type'] or analysis['issuing_bank']:
+                    card_info = f"Card type: {analysis['card_type'] or 'Unknown'}"
+                    if analysis['issuing_bank']:
+                        card_info += f", Bank: {analysis['issuing_bank']}"
+                    if analysis['country']:
+                        card_info += f", Country: {analysis['country']}"
+                    if analysis['is_prepaid']:
+                        card_info += ", Prepaid"
+                    if analysis['is_commercial']:
+                        card_info += ", Commercial"
+                    logger.info(card_info)
+                
+                # Method 2: Fallback to regex extraction if JSON parsing didn't work
+                if not token:
+                    logger.debug("Token not found in JSON structure, trying regex extraction")
+                    token = extract_with_regex('token', response_text)
+                
+                if not brand_code:
+                    logger.debug("Brand code not found in JSON, trying regex extraction")
+                    brand_code = extract_with_regex('brand_code', response_text)
+                
+                # Validate token
+                if not token:
+                    logger.error("Token not found in Braintree response")
+                    logger.debug(f"Response: {response_text[:500]}")
+                    
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(1 * (attempt + 1))
+                        continue
+                    raise TokenError("Failed to extract token from Braintree response")
+                
+                # Use default brand code if not found
+                if not brand_code:
+                    # Try to determine brand from BIN in analysis
+                    bin_number = analysis.get('bin')
+                    if bin_number and len(bin_number) >= 1:
+                        first_digit = bin_number[0]
+                        brand_map = {
+                            '4': 'visa',
+                            '5': 'master-card',
+                            '3': 'american-express',
+                            '6': 'discover'
+                        }
+                        brand_code = brand_map.get(first_digit, 'master-card')
+                        logger.debug(f"Determined brand code from BIN: {brand_code}")
+                    else:
+                        brand_code = "master-card"
+                        logger.debug("Brand code not found, using default: master-card")
+                
+                logger.info(f"✓ Card tokenized successfully: {card.masked_number()} → Token: {token[:10]}...{token[-4:]} (Brand: {brand_code})")
+                return token, brand_code
+                
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            last_error = e
+            error_msg = f"Network error during tokenization (attempt {attempt + 1}/{max_retries}): {str(e)}"
+            logger.warning(error_msg)
             
-            if not token:
-                logger.error("Token not found in Braintree response")
-                raise TokenError("Failed to get token from Braintree")
-            
-            if not brand_code:
-                brand_code = "master-card"
-                logger.debug("Brand code not found, using default")
-            
-            logger.info(f"Card tokenized successfully: {card.masked_number()} ({brand_code})")
-            return token, brand_code
-            
-    except aiohttp.ClientError as e:
-        logger.error(f"Network error during tokenization: {str(e)}")
-        raise TokenError(f"Tokenization failed: {str(e)}") from e
+            if attempt < max_retries - 1:
+                wait_time = 1 * (attempt + 1)
+                logger.debug(f"Retrying in {wait_time}s...")
+                await asyncio.sleep(wait_time)
+            else:
+                logger.error(f"All {max_retries} tokenization attempts failed")
+                raise TokenError(f"Tokenization failed after {max_retries} attempts: {str(e)}") from e
+        
+        except (TokenError, ValidationError):
+            # Don't retry validation or token errors
+            raise
+    
+    # If we get here, all retries failed
+    if last_error:
+        raise TokenError(f"Tokenization failed: {str(last_error)}") from last_error
+    raise TokenError("Tokenization failed for unknown reason")
 
 async def submit_payment_method(session: aiohttp.ClientSession, url: str,
                                 token: str, brand_code: str, wnonce: str,
@@ -1659,15 +1830,17 @@ async def submit_payment_method(session: aiohttp.ClientSession, url: str,
     return result
 
 async def process_card(session: aiohttp.ClientSession, url: str, 
-                      card: CardDetails, apbct_fields: APBCTFields) -> PaymentResult:
+                      card: CardDetails, apbct_fields: APBCTFields,
+                      site_config: Optional[SiteConfig] = None) -> PaymentResult:
     """
-    Process credit card payment.
+    Process credit card payment with site-specific configuration.
     
     Args:
         session: aiohttp client session
         url: Site URL
         card: Card details
         apbct_fields: Anti-spam fields
+        site_config: Site-specific configuration (optional)
         
     Returns:
         PaymentResult object
@@ -1677,6 +1850,11 @@ async def process_card(session: aiohttp.ClientSession, url: str,
     """
     try:
         logger.info(f"Processing card: {card.masked_number()}")
+        
+        # Get site configuration if not provided
+        if site_config is None:
+            config_mgr = get_config_manager()
+            site_config = config_mgr.get_site_config(url)
         
         # Update billing address (non-critical)
         await update_billing_address(session, url, apbct_fields)
@@ -1691,8 +1869,12 @@ async def process_card(session: aiohttp.ClientSession, url: str,
         # Get Braintree authorization token
         auth_fingerprint = await get_braintree_authorization_token(session, url, apbct_fields)
         
-        # Tokenize card
-        token, brand_code = await tokenize_card_with_braintree(session, card, auth_fingerprint)
+        # Tokenize card with site-specific GraphQL retry count
+        graphql_retries = site_config.graphql_retries
+        logger.debug(f"Using {graphql_retries} GraphQL retries for {url}")
+        token, brand_code = await tokenize_card_with_braintree(
+            session, card, auth_fingerprint, max_retries=graphql_retries
+        )
         
         # Submit payment method
         result = await submit_payment_method(session, url, token, brand_code, wnonce, apbct_fields)
@@ -1823,9 +2005,13 @@ async def test_single_site(site_url: str, card: CardDetails):
                 print("  [SKIP] Billing skipped")
                 results['step3_billing'] = 'SKIP'
             
-            # STEP 4: Add payment method
-            print("[STEP 4] Payment Method...")
+            # STEP 4: Add payment method with enhanced GraphQL tokenization
+            print("[STEP 4] Payment Method (with GraphQL retry)...")
             try:
+                # Get site configuration for GraphQL retries
+                config_mgr = get_config_manager()
+                site_config = config_mgr.get_site_config(site_url)
+                
                 wnonce, updated_apbct = await get_payment_method_nonce(session, site_url)
                 
                 if not wnonce:
@@ -1835,7 +2021,13 @@ async def test_single_site(site_url: str, card: CardDetails):
                     return results
                 
                 auth_fingerprint = await get_braintree_authorization_token(session, site_url, updated_apbct)
-                token, brand_code = await tokenize_card_with_braintree(session, card, auth_fingerprint)
+                
+                # Use site-specific GraphQL retry count
+                print(f"  [INFO] Using {site_config.graphql_retries} GraphQL retries")
+                token, brand_code = await tokenize_card_with_braintree(
+                    session, card, auth_fingerprint, max_retries=site_config.graphql_retries
+                )
+                
                 result = await submit_payment_method(session, site_url, token, brand_code, wnonce, updated_apbct)
                 
                 if result.status == PaymentStatus.APPROVED:
