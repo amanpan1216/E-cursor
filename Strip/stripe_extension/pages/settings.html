@@ -340,6 +340,74 @@
             </div>
         </div>
 
+        <!-- Telegram Section -->
+        <div id="telegram-section" class="settings-section">
+            <div class="section-title">
+                <i class="fab fa-telegram"></i> Telegram Integration
+            </div>
+            <div class="section-description">Configure Telegram bot to receive hit notifications</div>
+            
+            <div class="settings-card">
+                <div class="settings-card-header">
+                    <i class="fas fa-robot"></i>
+                    <h3>Bot Configuration</h3>
+                </div>
+                <div class="input-group">
+                    <label for="telegram-bot-token">
+                        <i class="fas fa-key"></i> Bot Token
+                    </label>
+                    <input type="text" id="telegram-bot-token" placeholder="Enter your Telegram Bot Token">
+                    <small class="input-hint">Get your bot token from @BotFather on Telegram</small>
+                </div>
+                <div class="input-group">
+                    <label for="telegram-chat-id">
+                        <i class="fas fa-user"></i> Chat ID
+                    </label>
+                    <input type="text" id="telegram-chat-id" placeholder="Enter your Telegram Chat ID">
+                    <small class="input-hint">Get your chat ID from @userinfobot on Telegram</small>
+                </div>
+            </div>
+
+            <div class="settings-card">
+                <div class="settings-card-header">
+                    <i class="fas fa-bell"></i>
+                    <h3>Notification Settings</h3>
+                </div>
+                <div class="toggle-item">
+                    <span class="toggle-label">Send Hit Notifications</span>
+                    <label class="switch">
+                        <input type="checkbox" id="telegram-hits-toggle" checked>
+                        <span class="switch-slider round"></span>
+                    </label>
+                    <div class="setting-description">Send message when a live card is found</div>
+                </div>
+                <div class="toggle-item">
+                    <span class="toggle-label">Send Decline Notifications</span>
+                    <label class="switch">
+                        <input type="checkbox" id="telegram-declines-toggle">
+                        <span class="switch-slider round"></span>
+                    </label>
+                    <div class="setting-description">Send message for declined cards</div>
+                </div>
+            </div>
+
+            <div class="telegram-status" id="telegram-status">
+                <div class="status-indicator">
+                    <i class="fas fa-circle"></i>
+                    <span id="telegram-status-text">Not Connected</span>
+                </div>
+            </div>
+
+            <div class="action-buttons">
+                <button class="main-button" id="save-telegram">
+                    <i class="fas fa-save"></i> Save Telegram Settings
+                </button>
+                <button class="secondary-button" id="test-telegram">
+                    <i class="fas fa-paper-plane"></i> Test Connection
+                </button>
+            </div>
+        </div>
+
         <!-- Captcha Section -->
         <div id="captcha-section" class="settings-section">
             <div class="section-title">Captcha Settings</div>

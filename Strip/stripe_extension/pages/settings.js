@@ -129,6 +129,17 @@ async function loadAllSettings() {
     document.getElementById('autofill-city').value = autofill.city || '';
     document.getElementById('autofill-zip').value = autofill.zip || '';
     document.getElementById('autofill-country').value = autofill.country || 'US';
+    
+    // Load Telegram settings
+    document.getElementById('telegram-bot-token').value = data.telegramBotToken || '';
+    document.getElementById('telegram-chat-id').value = data.telegramChatId || '';
+    document.getElementById('telegram-hits-toggle').checked = data.telegramHitsEnabled !== false;
+    document.getElementById('telegram-declines-toggle').checked = data.telegramDeclinesEnabled || false;
+    
+    // Update Telegram status
+    if (data.telegramBotToken && data.telegramChatId) {
+        updateTelegramStatus(true);
+    }
 }
 
 async function loadCheckoutLogs() {
@@ -245,6 +256,8 @@ function setupEventListeners() {
     document.getElementById('save-autofill').addEventListener('click', saveAutofill);
     document.getElementById('generate-billing').addEventListener('click', generateBilling);
     document.getElementById('save-captcha').addEventListener('click', saveCaptcha);
+    document.getElementById('save-telegram').addEventListener('click', saveTelegram);
+    document.getElementById('test-telegram').addEventListener('click', testTelegram);
     document.getElementById('save-settings').addEventListener('click', saveAllSettings);
     document.getElementById('reset-settings').addEventListener('click', resetSettings);
     document.getElementById('clear-all-data').addEventListener('click', clearAllData);
@@ -514,6 +527,82 @@ async function resetStatistics() {
         loadStatistics();
         loadHitLogs();
         showNotification('Statistics reset', 'success');
+    }
+}
+
+async function saveTelegram() {
+    const botToken = document.getElementById('telegram-bot-token').value.trim();
+    const chatId = document.getElementById('telegram-chat-id').value.trim();
+    const hitsEnabled = document.getElementById('telegram-hits-toggle').checked;
+    const declinesEnabled = document.getElementById('telegram-declines-toggle').checked;
+    
+    if (!botToken || !chatId) {
+        showNotification('Please enter both Bot Token and Chat ID', 'error');
+        return;
+    }
+    
+    await chrome.storage.local.set({
+        telegramBotToken: botToken,
+        telegramChatId: chatId,
+        telegramHitsEnabled: hitsEnabled,
+        telegramDeclinesEnabled: declinesEnabled
+    });
+    
+    updateTelegramStatus(true);
+    showNotification('Telegram settings saved successfully!', 'success');
+}
+
+async function testTelegram() {
+    const botToken = document.getElementById('telegram-bot-token').value.trim();
+    const chatId = document.getElementById('telegram-chat-id').value.trim();
+    
+    if (!botToken || !chatId) {
+        showNotification('Please enter both Bot Token and Chat ID first', 'error');
+        return;
+    }
+    
+    showNotification('Testing Telegram connection...', 'info');
+    
+    try {
+        const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                chat_id: chatId,
+                text: `🔔 <b>Stripe Toolkit - Test Message</b>\n\n✅ Connection successful!\n⏰ ${new Date().toLocaleString()}\n\nYour Telegram notifications are working correctly.`,
+                parse_mode: 'HTML'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.ok) {
+            updateTelegramStatus(true);
+            showNotification('Test message sent successfully! Check your Telegram.', 'success');
+        } else {
+            updateTelegramStatus(false);
+            showNotification(`Telegram error: ${data.description || 'Unknown error'}`, 'error');
+        }
+    } catch (error) {
+        updateTelegramStatus(false);
+        showNotification('Failed to send test message. Check your settings.', 'error');
+        console.error('[TELEGRAM TEST] Error:', error);
+    }
+}
+
+function updateTelegramStatus(connected) {
+    const statusText = document.getElementById('telegram-status-text');
+    const statusIndicator = document.querySelector('#telegram-status .status-indicator i');
+    
+    if (connected) {
+        statusText.textContent = 'Connected';
+        statusText.style.color = '#4caf50';
+        statusIndicator.style.color = '#4caf50';
+    } else {
+        statusText.textContent = 'Not Connected';
+        statusText.style.color = '#f44336';
+        statusIndicator.style.color = '#f44336';
     }
 }
 
