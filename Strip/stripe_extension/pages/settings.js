@@ -101,6 +101,12 @@ async function loadAllSettings() {
     document.getElementById('random-address-toggle').checked = settings.randomAddress || false;
     document.getElementById('captcha-service').value = settings.captchaService || 'internal';
     document.getElementById('captcha-api-key').value = settings.captchaApiKey || '';
+    
+    // Load captcha auto-click toggles
+    const autoCaptchaToggle = document.getElementById('auto-captcha-click-toggle');
+    const autoRecaptchaToggle = document.getElementById('auto-recaptcha-click-toggle');
+    if (autoCaptchaToggle) autoCaptchaToggle.checked = settings.autoCaptchaClick !== false;
+    if (autoRecaptchaToggle) autoRecaptchaToggle.checked = settings.autoRecaptchaClick !== false;
     document.getElementById('sound-toggle').checked = settings.soundAlerts || false;
     document.getElementById('notification-toggle').checked = settings.notifications || false;
     document.getElementById('auto-detect-toggle').checked = settings.autoDetect !== false;
@@ -301,8 +307,11 @@ async function saveCaptcha() {
     const settings = data.settings || {};
     settings.captchaService = document.getElementById('captcha-service').value;
     settings.captchaApiKey = document.getElementById('captcha-api-key').value;
+    settings.autoCaptchaClick = document.getElementById('auto-captcha-click-toggle')?.checked ?? true;
+    settings.autoRecaptchaClick = document.getElementById('auto-recaptcha-click-toggle')?.checked ?? true;
     
     await chrome.storage.local.set({ settings });
+    chrome.runtime.sendMessage({ type: 'settingsUpdated', settings });
     showNotification('Captcha settings saved', 'success');
 }
 

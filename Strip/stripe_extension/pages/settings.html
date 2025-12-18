@@ -318,21 +318,53 @@
         <!-- Captcha Section -->
         <div id="captcha-section" class="settings-section">
             <div class="section-title">Captcha Settings</div>
-            <div class="section-description">Configure captcha solving service</div>
+            <div class="section-description">Configure captcha solving and auto-click options</div>
             
-            <div class="input-group">
-                <label for="captcha-service">Captcha Service</label>
-                <select id="captcha-service">
-                    <option value="internal">Internal (Free)</option>
-                    <option value="2captcha">2Captcha</option>
-                    <option value="anticaptcha">AntiCaptcha</option>
-                    <option value="capmonster">CapMonster</option>
-                </select>
+            <div class="settings-card">
+                <div class="settings-card-header">
+                    <i class="fas fa-robot"></i>
+                    <h3>Auto-Click Options</h3>
+                </div>
+                <div class="toggle-item">
+                    <span class="toggle-label">Auto-Click hCaptcha Checkbox</span>
+                    <label class="switch">
+                        <input type="checkbox" id="auto-captcha-click-toggle" checked>
+                        <span class="switch-slider round"></span>
+                    </label>
+                </div>
+                <div class="toggle-item">
+                    <span class="toggle-label">Auto-Click reCaptcha Checkbox</span>
+                    <label class="switch">
+                        <input type="checkbox" id="auto-recaptcha-click-toggle" checked>
+                        <span class="switch-slider round"></span>
+                    </label>
+                </div>
+                <div class="info-text">
+                    <i class="fas fa-info-circle"></i>
+                    Auto-click will automatically click captcha checkboxes when detected on checkout pages.
+                </div>
             </div>
-            <div class="input-group">
-                <label for="captcha-api-key">API Key</label>
-                <input type="password" id="captcha-api-key" placeholder="Enter API key">
+            
+            <div class="settings-card">
+                <div class="settings-card-header">
+                    <i class="fas fa-key"></i>
+                    <h3>Captcha Solving Service</h3>
+                </div>
+                <div class="input-group">
+                    <label for="captcha-service">Service Provider</label>
+                    <select id="captcha-service">
+                        <option value="internal">Internal (Free - Auto-click only)</option>
+                        <option value="2captcha">2Captcha</option>
+                        <option value="anticaptcha">AntiCaptcha</option>
+                        <option value="capmonster">CapMonster</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label for="captcha-api-key">API Key</label>
+                    <input type="password" id="captcha-api-key" placeholder="Enter API key (required for external services)">
+                </div>
             </div>
+            
             <div class="action-buttons">
                 <button class="main-button" id="save-captcha">
                     <i class="fas fa-save"></i> Save Captcha Settings

