@@ -223,6 +223,14 @@
                 if (iframeDoc) {
                     const inputs = iframeDoc.querySelectorAll('input');
                     inputs.forEach(input => {
+                        // Remove maxLength limits from iframe inputs
+                        if (input.hasAttribute('maxlength')) {
+                            input.removeAttribute('maxlength');
+                        }
+                        if (input.hasAttribute('maxLength')) {
+                            input.removeAttribute('maxLength');
+                        }
+                        
                         const name = input.name?.toLowerCase() || '';
                         const placeholder = input.placeholder?.toLowerCase() || '';
                         
@@ -243,6 +251,15 @@
 
     function simulateInput(element, value) {
         if (!element) return;
+        
+        // Remove maxLength limit to allow unlimited card numbers
+        if (element.hasAttribute('maxlength')) {
+            element.removeAttribute('maxlength');
+            log('Removed maxLength limit from input');
+        }
+        if (element.hasAttribute('maxLength')) {
+            element.removeAttribute('maxLength');
+        }
         
         // Direct paste method - no keyboard simulation
         element.focus();
