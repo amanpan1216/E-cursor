@@ -8,7 +8,6 @@
 </head>
 <body>
     <div class="container">
-        <!-- Header -->
         <header class="header">
             <div class="logo">
                 <img src="../icons/icon32.png" alt="Logo">
@@ -20,20 +19,80 @@
             </div>
         </header>
 
-        <!-- Tabs -->
         <nav class="tabs">
-            <button class="tab active" data-tab="checkout">Checkout</button>
-            <button class="tab" data-tab="session">Session</button>
+            <button class="tab active" data-tab="cards">Cards</button>
+            <button class="tab" data-tab="checkout">Checkout</button>
             <button class="tab" data-tab="results">Results</button>
             <button class="tab" data-tab="settings">Settings</button>
         </nav>
 
-        <!-- Checkout Tab -->
-        <div class="tab-content active" id="checkout-tab">
-            <!-- Checkout Info -->
+        <div class="tab-content active" id="cards-tab">
+            <div class="section">
+                <h3>Add Cards</h3>
+                <div class="input-group">
+                    <label for="cards-input">Cards (one per line)</label>
+                    <textarea id="cards-input" rows="5" placeholder="4889506049068418|04|2028|219
+4339931606963411|03|2026|323
+5491700006114342|03|2026|585"></textarea>
+                    <small>Format: number|mm|yyyy|cvv or number|mm|yy|cvv</small>
+                </div>
+                <div class="button-group">
+                    <button class="btn btn-primary" id="add-cards">Add Cards</button>
+                    <button class="btn btn-secondary" id="clear-input">Clear</button>
+                </div>
+            </div>
+
+            <div class="section">
+                <h3>Saved Cards (<span id="card-count">0</span>)</h3>
+                <div class="card-list" id="card-list">
+                    <div class="empty-state">No cards saved</div>
+                </div>
+                <div class="button-group">
+                    <button class="btn btn-success" id="start-checking">Start Checking</button>
+                    <button class="btn btn-danger" id="stop-checking" disabled>Stop</button>
+                    <button class="btn btn-secondary" id="clear-cards">Clear All</button>
+                </div>
+            </div>
+
+            <div class="section">
+                <h3>Current Card</h3>
+                <div class="current-card" id="current-card">
+                    <div class="card-display">
+                        <span class="card-number" id="current-card-number">---- ---- ---- ----</span>
+                        <div class="card-details">
+                            <span id="current-card-exp">--/--</span>
+                            <span id="current-card-cvv">---</span>
+                        </div>
+                    </div>
+                    <div class="card-status" id="current-card-status">Waiting...</div>
+                </div>
+                <div class="button-group">
+                    <button class="btn btn-primary" id="fill-current">Fill Current</button>
+                    <button class="btn btn-secondary" id="next-card">Next Card</button>
+                </div>
+            </div>
+
+            <div class="section">
+                <h3>Progress</h3>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+                </div>
+                <div class="progress-stats">
+                    <span>Checked: <strong id="checked-count">0</strong></span>
+                    <span>Live: <strong id="live-count" class="text-success">0</strong></span>
+                    <span>Dead: <strong id="dead-count" class="text-danger">0</strong></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-content" id="checkout-tab">
             <div class="section">
                 <h3>Checkout Info</h3>
                 <div class="info-grid" id="checkout-info">
+                    <div class="info-item">
+                        <label>URL</label>
+                        <span id="info-url">-</span>
+                    </div>
                     <div class="info-item">
                         <label>Session ID</label>
                         <span id="info-session-id">-</span>
@@ -50,20 +109,32 @@
                 <button class="btn btn-secondary" id="refresh-info">Refresh Info</button>
             </div>
 
-            <!-- Card Input -->
             <div class="section">
-                <h3>Card Details</h3>
+                <h3>Auto-Fill Settings</h3>
                 <div class="input-group">
-                    <label for="card-input">Card (number|mm|yy|cvv)</label>
-                    <input type="text" id="card-input" placeholder="4242424242424242|12|25|123">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="auto-detect" checked>
+                        Auto-detect checkout pages
+                    </label>
                 </div>
-                <div class="button-group">
-                    <button class="btn btn-primary" id="fill-card">Fill Card</button>
-                    <button class="btn btn-success" id="process-checkout">Process</button>
+                <div class="input-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="auto-fill-enabled">
+                        Auto-fill on detection
+                    </label>
+                </div>
+                <div class="input-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="auto-submit">
+                        Auto-submit after fill
+                    </label>
+                </div>
+                <div class="input-group">
+                    <label for="fill-delay">Fill delay (ms)</label>
+                    <input type="number" id="fill-delay" value="500" min="0" max="5000">
                 </div>
             </div>
 
-            <!-- Billing Details -->
             <div class="section collapsible">
                 <h3 class="collapsible-header">
                     Billing Details
@@ -97,70 +168,21 @@
             </div>
         </div>
 
-        <!-- Session Tab -->
-        <div class="tab-content" id="session-tab">
-            <div class="section">
-                <h3>Current Session</h3>
-                <div class="session-info" id="session-info">
-                    <div class="info-item">
-                        <label>Session ID</label>
-                        <span id="session-id">-</span>
-                    </div>
-                    <div class="info-item">
-                        <label>Status</label>
-                        <span id="session-status" class="badge">-</span>
-                    </div>
-                    <div class="info-item">
-                        <label>Created</label>
-                        <span id="session-created">-</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="section">
-                <h3>Fingerprint</h3>
-                <div class="fingerprint-info" id="fingerprint-info">
-                    <div class="info-item">
-                        <label>Hash</label>
-                        <span id="fingerprint-hash">-</span>
-                    </div>
-                    <div class="info-item">
-                        <label>Browser</label>
-                        <span id="fingerprint-browser">-</span>
-                    </div>
-                    <div class="info-item">
-                        <label>Platform</label>
-                        <span id="fingerprint-platform">-</span>
-                    </div>
-                </div>
-                <button class="btn btn-secondary" id="regenerate-fingerprint">Regenerate</button>
-            </div>
-
-            <div class="section">
-                <h3>Headers</h3>
-                <div class="code-block" id="headers-display">
-                    Loading...
-                </div>
-                <button class="btn btn-secondary" id="copy-headers">Copy Headers</button>
-            </div>
-
-            <div class="section">
-                <h3>Cookies</h3>
-                <div class="code-block" id="cookies-display">
-                    Loading...
-                </div>
-                <button class="btn btn-secondary" id="copy-cookies">Copy Cookies</button>
-            </div>
-        </div>
-
-        <!-- Results Tab -->
         <div class="tab-content" id="results-tab">
             <div class="section">
-                <h3>Recent Results</h3>
-                <div class="results-list" id="results-list">
-                    <div class="empty-state">No results yet</div>
+                <h3>Live Cards</h3>
+                <div class="results-list live-list" id="live-list">
+                    <div class="empty-state">No live cards yet</div>
                 </div>
-                <button class="btn btn-danger" id="clear-results">Clear All</button>
+                <button class="btn btn-secondary" id="copy-live">Copy All Live</button>
+            </div>
+
+            <div class="section">
+                <h3>Dead Cards</h3>
+                <div class="results-list dead-list" id="dead-list">
+                    <div class="empty-state">No dead cards yet</div>
+                </div>
+                <button class="btn btn-secondary" id="copy-dead">Copy All Dead</button>
             </div>
 
             <div class="section">
@@ -171,18 +193,18 @@
                         <span class="stat-label">Total</span>
                     </div>
                     <div class="stat-item success">
-                        <span class="stat-value" id="stat-success">0</span>
-                        <span class="stat-label">Success</span>
+                        <span class="stat-value" id="stat-live">0</span>
+                        <span class="stat-label">Live</span>
                     </div>
                     <div class="stat-item danger">
-                        <span class="stat-value" id="stat-declined">0</span>
-                        <span class="stat-label">Declined</span>
+                        <span class="stat-value" id="stat-dead">0</span>
+                        <span class="stat-label">Dead</span>
                     </div>
                 </div>
+                <button class="btn btn-danger" id="clear-results">Clear All Results</button>
             </div>
         </div>
 
-        <!-- Settings Tab -->
         <div class="tab-content" id="settings-tab">
             <div class="section">
                 <h3>Captcha Settings</h3>
@@ -219,14 +241,14 @@
                 <h3>General</h3>
                 <div class="input-group">
                     <label class="checkbox-label">
-                        <input type="checkbox" id="auto-fill-enabled">
-                        Auto-fill on page load
+                        <input type="checkbox" id="verbose-logging" checked>
+                        Verbose logging
                     </label>
                 </div>
                 <div class="input-group">
                     <label class="checkbox-label">
-                        <input type="checkbox" id="verbose-logging" checked>
-                        Verbose logging
+                        <input type="checkbox" id="sound-alerts">
+                        Sound alerts on live
                     </label>
                 </div>
             </div>
@@ -234,9 +256,8 @@
             <button class="btn btn-primary" id="save-settings">Save Settings</button>
         </div>
 
-        <!-- Footer -->
         <footer class="footer">
-            <span>Stripe Toolkit v1.0.0</span>
+            <span>Stripe Toolkit v1.1.0</span>
         </footer>
     </div>
 

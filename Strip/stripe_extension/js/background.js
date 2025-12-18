@@ -1,302 +1,162 @@
-/**
- * Background Service Worker
- * Handles extension lifecycle, storage, and cross-tab communication
- */
-
-// Storage for sessions and results
-let sessions = {};
-let results = [];
 let settings = {
-    autoFillEnabled: false,
+    autoDetect: true,
+    autoFill: false,
+    autoSubmit: false,
+    fillDelay: 500,
     captchaApiKey: '',
-    captchaService: '2captcha',
+    captchaService: 'internal',
     proxyEnabled: false,
     proxyList: [],
-    verbose: true
+    verbose: true,
+    soundAlerts: false
 };
 
-/**
- * Initialize extension
- */
 chrome.runtime.onInstalled.addListener(() => {
     console.log('[BACKGROUND] Stripe Toolkit installed');
     
-    // Load settings from storage
-    chrome.storage.local.get(['settings', 'sessions', 'results'], (data) => {
+    chrome.storage.local.get(['settings', 'cards', 'liveCards', 'deadCards'], (data) => {
         if (data.settings) settings = { ...settings, ...data.settings };
-        if (data.sessions) sessions = data.sessions;
-        if (data.results) results = data.results;
     });
 });
 
-/**
- * Listen for messages from content scripts
- */
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const tabId = sender.tab?.id;
     
     switch (message.type) {
-        case 'initialized':
-            handleInitialized(tabId, message.data);
+        case 'checkoutDetected':
+            handleCheckoutDetected(tabId, message);
             break;
             
-        case 'response':
-            handleResponse(tabId, message.data);
-            break;
-            
-        case 'captcha':
-            handleCaptcha(tabId, message.data);
-            break;
-            
-        case '3ds':
-            handle3DS(tabId, message.data);
-            break;
-            
-        case 'success':
-            handleSuccess(tabId, message.data);
-            break;
-            
-        case 'decline':
-            handleDecline(tabId, message.data);
+        case 'cardResult':
+            handleCardResult(tabId, message.result);
             break;
             
         case 'getSettings':
             sendResponse(settings);
             break;
             
-        case 'saveSettings':
-            saveSettings(message.data);
+        case 'settingsUpdated':
+            settings = { ...settings, ...message.settings };
+            break;
+            
+        case 'getCards':
+            chrome.storage.local.get(['cards'], (data) => {
+                sendResponse(data.cards || []);
+            });
+            return true;
+            
+        case 'saveCards':
+            chrome.storage.local.set({ cards: message.cards });
             sendResponse({ success: true });
             break;
             
-        case 'getSessions':
-            sendResponse(sessions);
-            break;
+        case 'getLiveCards':
+            chrome.storage.local.get(['liveCards'], (data) => {
+                sendResponse(data.liveCards || []);
+            });
+            return true;
             
-        case 'getResults':
-            sendResponse(results);
-            break;
-            
-        case 'clearResults':
-            results = [];
-            saveResults();
-            sendResponse({ success: true });
-            break;
+        case 'getDeadCards':
+            chrome.storage.local.get(['deadCards'], (data) => {
+                sendResponse(data.deadCards || []);
+            });
+            return true;
             
         default:
-            console.log('[BACKGROUND] Unknown message type:', message.type);
+            console.log('[BACKGROUND] Unknown message:', message.type);
     }
     
-    return true; // Keep channel open for async responses
+    return true;
 });
 
-/**
- * Handle content script initialization
- */
-function handleInitialized(tabId, data) {
-    console.log('[BACKGROUND] Tab initialized:', tabId, data.url);
+function handleCheckoutDetected(tabId, message) {
+    console.log('[BACKGROUND] Checkout detected:', tabId, message.info?.url);
     
-    sessions[tabId] = {
-        url: data.url,
-        sessionId: data.sessionId,
-        status: 'active',
-        startTime: Date.now()
-    };
-    
-    saveSessions();
-    
-    // Update badge
     chrome.action.setBadgeText({ text: 'ON', tabId: tabId });
     chrome.action.setBadgeBackgroundColor({ color: '#22c55e', tabId: tabId });
-}
-
-/**
- * Handle Stripe API response
- */
-function handleResponse(tabId, data) {
-    console.log('[BACKGROUND] Response from tab:', tabId);
     
-    if (sessions[tabId]) {
-        sessions[tabId].lastResponse = data;
-        sessions[tabId].lastActivity = Date.now();
-        saveSessions();
-    }
-}
-
-/**
- * Handle captcha event
- */
-function handleCaptcha(tabId, data) {
-    console.log('[BACKGROUND] Captcha event:', tabId, data.result?.success);
-    
-    if (sessions[tabId]) {
-        sessions[tabId].captchaRequired = true;
-        sessions[tabId].captchaSolved = data.result?.success;
-        saveSessions();
-    }
-    
-    // Update badge
-    chrome.action.setBadgeText({ text: 'CAP', tabId: tabId });
-    chrome.action.setBadgeBackgroundColor({ color: '#f59e0b', tabId: tabId });
-}
-
-/**
- * Handle 3DS event
- */
-function handle3DS(tabId, data) {
-    console.log('[BACKGROUND] 3DS event:', tabId, data.result?.success);
-    
-    if (sessions[tabId]) {
-        sessions[tabId].threeDSRequired = true;
-        sessions[tabId].threeDSCompleted = data.result?.success;
-        saveSessions();
-    }
-    
-    // Update badge
-    chrome.action.setBadgeText({ text: '3DS', tabId: tabId });
-    chrome.action.setBadgeBackgroundColor({ color: '#8b5cf6', tabId: tabId });
-}
-
-/**
- * Handle success event
- */
-function handleSuccess(tabId, data) {
-    console.log('[BACKGROUND] Payment success:', tabId);
-    
-    // Add to results
-    results.push({
-        type: 'success',
-        tabId: tabId,
-        url: sessions[tabId]?.url,
-        paymentIntent: data.paymentIntent?.id,
-        timestamp: Date.now()
-    });
-    
-    // Keep only last 100 results
-    if (results.length > 100) {
-        results = results.slice(-100);
-    }
-    
-    saveResults();
-    
-    // Update session
-    if (sessions[tabId]) {
-        sessions[tabId].status = 'success';
-        sessions[tabId].endTime = Date.now();
-        saveSessions();
-    }
-    
-    // Update badge
-    chrome.action.setBadgeText({ text: '✓', tabId: tabId });
-    chrome.action.setBadgeBackgroundColor({ color: '#22c55e', tabId: tabId });
-    
-    // Show notification
-    chrome.notifications.create({
-        type: 'basic',
-        iconUrl: 'icons/icon128.png',
-        title: 'Payment Successful',
-        message: `Payment completed on ${sessions[tabId]?.url || 'Stripe Checkout'}`
-    });
-}
-
-/**
- * Handle decline event
- */
-function handleDecline(tabId, data) {
-    console.log('[BACKGROUND] Payment declined:', tabId, data.error?.decline_code);
-    
-    // Add to results
-    results.push({
-        type: 'decline',
-        tabId: tabId,
-        url: sessions[tabId]?.url,
-        error: data.error,
-        timestamp: Date.now()
-    });
-    
-    saveResults();
-    
-    // Update session
-    if (sessions[tabId]) {
-        sessions[tabId].status = 'declined';
-        sessions[tabId].error = data.error;
-        sessions[tabId].endTime = Date.now();
-        saveSessions();
-    }
-    
-    // Update badge
-    chrome.action.setBadgeText({ text: '✗', tabId: tabId });
-    chrome.action.setBadgeBackgroundColor({ color: '#ef4444', tabId: tabId });
-}
-
-/**
- * Save settings to storage
- */
-function saveSettings(newSettings) {
-    settings = { ...settings, ...newSettings };
-    chrome.storage.local.set({ settings: settings });
-}
-
-/**
- * Save sessions to storage
- */
-function saveSessions() {
-    chrome.storage.local.set({ sessions: sessions });
-}
-
-/**
- * Save results to storage
- */
-function saveResults() {
-    chrome.storage.local.set({ results: results });
-}
-
-/**
- * Handle tab close
- */
-chrome.tabs.onRemoved.addListener((tabId) => {
-    if (sessions[tabId]) {
-        sessions[tabId].status = 'closed';
-        sessions[tabId].endTime = Date.now();
-        saveSessions();
-    }
-});
-
-/**
- * Handle extension icon click
- */
-chrome.action.onClicked.addListener((tab) => {
-    // Open popup or options page
-    chrome.action.openPopup();
-});
-
-/**
- * Context menu setup
- */
-chrome.runtime.onInstalled.addListener(() => {
-    chrome.contextMenus.create({
-        id: 'stripe-toolkit-fill',
-        title: 'Fill Card Details',
-        contexts: ['page'],
-        documentUrlPatterns: ['https://checkout.stripe.com/*']
-    });
-    
-    chrome.contextMenus.create({
-        id: 'stripe-toolkit-extract',
-        title: 'Extract Checkout Info',
-        contexts: ['page'],
-        documentUrlPatterns: ['https://checkout.stripe.com/*']
-    });
-});
-
-chrome.contextMenus.onClicked.addListener((info, tab) => {
-    if (info.menuItemId === 'stripe-toolkit-fill') {
-        chrome.tabs.sendMessage(tab.id, { action: 'showFillDialog' });
-    } else if (info.menuItemId === 'stripe-toolkit-extract') {
-        chrome.tabs.sendMessage(tab.id, { action: 'getInfo' }, (response) => {
-            console.log('[BACKGROUND] Checkout info:', response);
+    if (settings.autoFill) {
+        chrome.storage.local.get(['cards', 'currentCardIndex'], (data) => {
+            const cards = data.cards || [];
+            const index = data.currentCardIndex || 0;
+            
+            if (cards.length > 0 && cards[index]) {
+                setTimeout(() => {
+                    chrome.tabs.sendMessage(tabId, {
+                        action: 'fillCard',
+                        card: cards[index]
+                    });
+                }, settings.fillDelay);
+            }
         });
     }
+}
+
+function handleCardResult(tabId, result) {
+    console.log('[BACKGROUND] Card result:', result);
+    
+    chrome.storage.local.get(['cards', 'currentCardIndex', 'liveCards', 'deadCards'], (data) => {
+        const cards = data.cards || [];
+        const index = data.currentCardIndex || 0;
+        let liveCards = data.liveCards || [];
+        let deadCards = data.deadCards || [];
+        
+        if (cards[index]) {
+            const card = cards[index];
+            card.timestamp = Date.now();
+            
+            if (result.success || result.status === 'live') {
+                card.status = 'live';
+                liveCards.push({ ...card });
+                
+                chrome.action.setBadgeText({ text: 'LIVE', tabId: tabId });
+                chrome.action.setBadgeBackgroundColor({ color: '#22c55e', tabId: tabId });
+                
+                if (settings.soundAlerts) {
+                    chrome.tabs.sendMessage(tabId, { action: 'playSound', type: 'live' });
+                }
+                
+                chrome.notifications.create({
+                    type: 'basic',
+                    iconUrl: 'icons/icon128.png',
+                    title: 'LIVE CARD!',
+                    message: `Card ending in ${card.number.slice(-4)} is LIVE!`
+                });
+            } else {
+                card.status = 'dead';
+                card.error = result.error || result.declineCode || 'Declined';
+                deadCards.push({ ...card });
+                
+                chrome.action.setBadgeText({ text: 'DEAD', tabId: tabId });
+                chrome.action.setBadgeBackgroundColor({ color: '#ef4444', tabId: tabId });
+            }
+            
+            cards[index] = card;
+            
+            chrome.storage.local.set({
+                cards: cards,
+                liveCards: liveCards,
+                deadCards: deadCards
+            });
+        }
+    });
+}
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (changeInfo.status === 'complete' && settings.autoDetect) {
+        const url = tab.url || '';
+        if (url.includes('checkout.stripe.com') || 
+            url.includes('stripe.com/pay') ||
+            url.includes('/checkout')) {
+            
+            chrome.action.setBadgeText({ text: 'ON', tabId: tabId });
+            chrome.action.setBadgeBackgroundColor({ color: '#22c55e', tabId: tabId });
+        }
+    }
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+    console.log('[BACKGROUND] Tab closed:', tabId);
 });
 
 console.log('[BACKGROUND] Service worker started');

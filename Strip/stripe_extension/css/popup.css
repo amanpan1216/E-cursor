@@ -1,5 +1,3 @@
-/* Stripe Toolkit Popup Styles */
-
 * {
     margin: 0;
     padding: 0;
@@ -7,12 +5,12 @@
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     font-size: 13px;
     line-height: 1.5;
     color: #1a1a2e;
     background: #f8f9fa;
-    width: 380px;
+    width: 400px;
     min-height: 500px;
     max-height: 600px;
     overflow-y: auto;
@@ -24,7 +22,6 @@ body {
     min-height: 100%;
 }
 
-/* Header */
 .header {
     display: flex;
     justify-content: space-between;
@@ -69,7 +66,6 @@ body {
 .status-dot.error { background: #ef4444; }
 .status-dot.info { background: #3b82f6; }
 
-/* Tabs */
 .tabs {
     display: flex;
     background: white;
@@ -99,18 +95,17 @@ body {
     border-bottom-color: #5469d4;
 }
 
-/* Tab Content */
 .tab-content {
     display: none;
     padding: 12px 16px;
     flex: 1;
+    overflow-y: auto;
 }
 
 .tab-content.active {
     display: block;
 }
 
-/* Sections */
 .section {
     background: white;
     border-radius: 8px;
@@ -128,7 +123,6 @@ body {
     border-bottom: 1px solid #e5e7eb;
 }
 
-/* Collapsible */
 .collapsible .collapsible-header {
     cursor: pointer;
     display: flex;
@@ -149,7 +143,6 @@ body {
     transform: rotate(-90deg);
 }
 
-/* Info Grid */
 .info-grid {
     display: grid;
     gap: 8px;
@@ -177,7 +170,6 @@ body {
     white-space: nowrap;
 }
 
-/* Input Groups */
 .input-group {
     margin-bottom: 10px;
 }
@@ -198,6 +190,7 @@ body {
     border: 1px solid #d1d5db;
     border-radius: 6px;
     font-size: 12px;
+    font-family: inherit;
     transition: border-color 0.2s, box-shadow 0.2s;
 }
 
@@ -211,7 +204,16 @@ body {
 
 .input-group textarea {
     resize: vertical;
-    min-height: 60px;
+    min-height: 80px;
+    font-family: 'Monaco', 'Menlo', monospace;
+    font-size: 11px;
+}
+
+.input-group small {
+    display: block;
+    margin-top: 4px;
+    font-size: 10px;
+    color: #9ca3af;
 }
 
 .input-row {
@@ -223,12 +225,12 @@ body {
     flex: 1;
 }
 
-/* Checkbox */
 .checkbox-label {
     display: flex;
     align-items: center;
     gap: 8px;
     cursor: pointer;
+    font-size: 12px;
 }
 
 .checkbox-label input[type="checkbox"] {
@@ -237,7 +239,6 @@ body {
     accent-color: #5469d4;
 }
 
-/* Buttons */
 .btn {
     padding: 8px 16px;
     border: none;
@@ -285,6 +286,28 @@ body {
     background: #dc2626;
 }
 
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-icon {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    background: #fee2e2;
+    color: #ef4444;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+}
+
+.btn-icon:hover {
+    background: #fecaca;
+}
+
 .button-group {
     display: flex;
     gap: 8px;
@@ -295,82 +318,187 @@ body {
     flex: 1;
 }
 
-/* Badge */
-.badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 10px;
-    font-size: 11px;
-    font-weight: 500;
-}
-
-.badge.active { background: #dcfce7; color: #166534; }
-.badge.success { background: #dcfce7; color: #166534; }
-.badge.completed { background: #dbeafe; color: #1e40af; }
-.badge.failed { background: #fee2e2; color: #991b1b; }
-.badge.declined { background: #fee2e2; color: #991b1b; }
-.badge.expired { background: #f3f4f6; color: #6b7280; }
-
-/* Code Block */
-.code-block {
-    background: #1f2937;
-    color: #e5e7eb;
-    padding: 10px;
-    border-radius: 6px;
-    font-family: 'Monaco', 'Menlo', monospace;
-    font-size: 10px;
-    max-height: 120px;
-    overflow: auto;
-    white-space: pre-wrap;
-    word-break: break-all;
-}
-
-/* Results List */
-.results-list {
-    max-height: 200px;
+.card-list {
+    max-height: 150px;
     overflow-y: auto;
+    margin-bottom: 10px;
 }
 
-.result-item {
+.card-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     padding: 8px;
-    border-radius: 6px;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
     background: #f9fafb;
+    border-radius: 6px;
     border-left: 3px solid #d1d5db;
+    cursor: pointer;
+    transition: all 0.2s;
 }
 
-.result-item.success {
+.card-item:hover {
+    background: #f3f4f6;
+}
+
+.card-item.current {
+    background: #eff6ff;
+    border-left-color: #5469d4;
+}
+
+.card-item.live {
     background: #f0fdf4;
     border-left-color: #22c55e;
 }
 
-.result-item.decline {
+.card-item.dead {
     background: #fef2f2;
     border-left-color: #ef4444;
 }
 
-.result-header {
+.card-item.checking {
+    background: #fefce8;
+    border-left-color: #f59e0b;
+}
+
+.card-info {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 4px;
+    flex-direction: column;
+    gap: 2px;
 }
 
-.result-type {
-    font-weight: 600;
+.card-num {
+    font-family: 'Monaco', 'Menlo', monospace;
+    font-size: 11px;
+    color: #374151;
 }
 
-.result-item.success .result-type { color: #22c55e; }
-.result-item.decline .result-type { color: #ef4444; }
-
-.result-time {
+.card-exp {
     font-size: 10px;
     color: #9ca3af;
 }
 
-.result-details {
+.card-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.card-status-badge {
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.card-status-badge.pending { background: #f3f4f6; color: #6b7280; }
+.card-status-badge.checking { background: #fef3c7; color: #92400e; }
+.card-status-badge.live { background: #dcfce7; color: #166534; }
+.card-status-badge.dead { background: #fee2e2; color: #991b1b; }
+
+.current-card {
+    background: linear-gradient(135deg, #1e3a5f 0%, #2d4a6f 100%);
+    border-radius: 12px;
+    padding: 16px;
+    color: white;
+    margin-bottom: 10px;
+}
+
+.card-display {
+    margin-bottom: 12px;
+}
+
+.card-number {
+    font-family: 'Monaco', 'Menlo', monospace;
+    font-size: 16px;
+    letter-spacing: 2px;
+    display: block;
+    margin-bottom: 8px;
+}
+
+.card-details {
+    display: flex;
+    gap: 20px;
+    font-size: 12px;
+    opacity: 0.8;
+}
+
+.card-status {
+    text-align: center;
+    font-size: 11px;
+    padding: 4px 8px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 4px;
+}
+
+.card-status.live { background: #22c55e; }
+.card-status.dead { background: #ef4444; }
+.card-status.checking { background: #f59e0b; }
+
+.progress-bar {
+    height: 8px;
+    background: #e5e7eb;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #5469d4, #22c55e);
+    border-radius: 4px;
+    transition: width 0.3s;
+}
+
+.progress-stats {
+    display: flex;
+    justify-content: space-between;
     font-size: 11px;
     color: #6b7280;
+}
+
+.progress-stats strong {
+    color: #374151;
+}
+
+.text-success { color: #22c55e !important; }
+.text-danger { color: #ef4444 !important; }
+
+.results-list {
+    max-height: 150px;
+    overflow-y: auto;
+    margin-bottom: 10px;
+}
+
+.result-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px;
+    margin-bottom: 4px;
+    border-radius: 6px;
+    font-size: 11px;
+}
+
+.result-item.success {
+    background: #f0fdf4;
+    border-left: 3px solid #22c55e;
+}
+
+.result-item.decline {
+    background: #fef2f2;
+    border-left: 3px solid #ef4444;
+}
+
+.result-card {
+    font-family: 'Monaco', 'Menlo', monospace;
+    font-size: 10px;
+}
+
+.result-time, .result-error {
+    font-size: 10px;
+    color: #9ca3af;
 }
 
 .empty-state {
@@ -380,7 +508,6 @@ body {
     font-size: 12px;
 }
 
-/* Stats Grid */
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -413,7 +540,6 @@ body {
     text-transform: uppercase;
 }
 
-/* Footer */
 .footer {
     padding: 10px 16px;
     text-align: center;
@@ -423,7 +549,6 @@ body {
     background: white;
 }
 
-/* Notification */
 .notification {
     position: fixed;
     bottom: 20px;
@@ -457,7 +582,6 @@ body {
     to { opacity: 0; }
 }
 
-/* Scrollbar */
 ::-webkit-scrollbar {
     width: 6px;
 }

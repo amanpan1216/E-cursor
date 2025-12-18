@@ -1,126 +1,329 @@
-/**
- * Content Script - Main entry point for Stripe Checkout pages
- * Coordinates all modules and handles page interaction
- */
-
 (function() {
     'use strict';
 
-    // Initialize modules
     let fingerprint = null;
     let antiBot = null;
     let sessionManager = null;
     let captchaSolver = null;
     let threeDSHandler = null;
     let paymentHandler = null;
-
-    // Current session
     let currentSession = null;
+    let isCheckoutPage = false;
+    let cardFieldsDetected = false;
 
-    // Configuration
     const config = {
         autoApplyFingerprint: true,
         autoApplyAntiBot: true,
         verbose: true
     };
 
-    /**
-     * Initialize all modules
-     */
-    function initializeModules() {
-        log('Initializing Stripe Toolkit...');
+    const CARD_SELECTORS = {
+        number: [
+            'input[name="cardNumber"]',
+            'input[data-elements-stable-field-name="cardNumber"]',
+            'input[autocomplete="cc-number"]',
+            'input[placeholder*="card number" i]',
+            'input[placeholder*="1234" i]',
+            'input[id*="cardNumber" i]',
+            'input[id*="card-number" i]',
+            'input[name="card_number"]',
+            'input[name="ccnumber"]',
+            'input[data-testid="card-number-input"]',
+            '#card-number',
+            '.card-number input',
+            '[data-stripe="number"]'
+        ],
+        expiry: [
+            'input[name="cardExpiry"]',
+            'input[data-elements-stable-field-name="cardExpiry"]',
+            'input[autocomplete="cc-exp"]',
+            'input[placeholder*="MM" i]',
+            'input[placeholder*="expir" i]',
+            'input[id*="expiry" i]',
+            'input[id*="exp-date" i]',
+            'input[name="exp_date"]',
+            'input[name="ccexp"]',
+            '[data-stripe="exp"]'
+        ],
+        expMonth: [
+            'input[name="cardExpiryMonth"]',
+            'input[autocomplete="cc-exp-month"]',
+            'select[name="exp_month"]',
+            'select[id*="month" i]',
+            'input[placeholder*="MM" i]:not([placeholder*="YY" i])'
+        ],
+        expYear: [
+            'input[name="cardExpiryYear"]',
+            'input[autocomplete="cc-exp-year"]',
+            'select[name="exp_year"]',
+            'select[id*="year" i]',
+            'input[placeholder*="YY" i]:not([placeholder*="MM" i])'
+        ],
+        cvv: [
+            'input[name="cardCvc"]',
+            'input[data-elements-stable-field-name="cardCvc"]',
+            'input[autocomplete="cc-csc"]',
+            'input[placeholder*="CVC" i]',
+            'input[placeholder*="CVV" i]',
+            'input[placeholder*="security" i]',
+            'input[id*="cvc" i]',
+            'input[id*="cvv" i]',
+            'input[name="cvc"]',
+            'input[name="cvv"]',
+            '[data-stripe="cvc"]'
+        ],
+        email: [
+            'input[type="email"]',
+            'input[name="email"]',
+            'input[autocomplete="email"]',
+            'input[placeholder*="email" i]'
+        ],
+        name: [
+            'input[name="cardholderName"]',
+            'input[name="name"]',
+            'input[autocomplete="cc-name"]',
+            'input[placeholder*="name on card" i]',
+            'input[placeholder*="cardholder" i]'
+        ]
+    };
 
-        // Initialize fingerprint module
-        if (typeof BrowserFingerprint !== 'undefined') {
-            fingerprint = new BrowserFingerprint();
-            fingerprint.generateFingerprint();
-            
-            if (config.autoApplyFingerprint) {
-                fingerprint.applyFingerprint();
-            }
-            log('Fingerprint module initialized');
+    function log(...args) {
+        if (config.verbose) {
+            console.log('[STRIPE-TOOLKIT]', ...args);
         }
+    }
 
-        // Initialize anti-bot module
-        if (typeof AntiBotHeaders !== 'undefined') {
-            antiBot = new AntiBotHeaders({
-                verbose: config.verbose
-            });
-            
-            if (config.autoApplyAntiBot) {
-                antiBot.applyAntiBotMeasures();
-            }
-            log('Anti-bot module initialized');
-        }
-
-        // Initialize session manager
-        if (typeof SessionManager !== 'undefined') {
-            sessionManager = new SessionManager();
-            log('Session manager initialized');
-        }
-
-        // Initialize captcha solver
-        if (typeof CaptchaSolver !== 'undefined') {
-            captchaSolver = new CaptchaSolver({
-                verbose: config.verbose
-            });
-            log('Captcha solver initialized');
-        }
-
-        // Initialize 3DS handler
-        if (typeof ThreeDSHandler !== 'undefined') {
-            threeDSHandler = new ThreeDSHandler({
-                verbose: config.verbose
-            });
-            log('3DS handler initialized');
-        }
-
-        // Initialize payment handler
-        if (typeof PaymentHandler !== 'undefined') {
-            paymentHandler = new PaymentHandler({
-                verbose: config.verbose
-            });
-            log('Payment handler initialized');
-        }
-
-        // Create or get session for current URL
-        if (sessionManager) {
-            currentSession = sessionManager.getOrCreateSession(window.location.href);
-            
-            // Store fingerprint in session
-            if (fingerprint && currentSession) {
-                sessionManager.setFingerprint(
-                    currentSession.id,
-                    fingerprint.getFingerprint(),
-                    fingerprint.getHash()
-                );
-            }
-
-            // Store headers in session
-            if (antiBot && currentSession) {
-                sessionManager.setHeaders(
-                    currentSession.id,
-                    antiBot.getHeaders()
-                );
-                sessionManager.setCookies(
-                    currentSession.id,
-                    antiBot.getCookies()
-                );
-            }
-        }
-
-        log('All modules initialized');
+    function detectCheckoutPage() {
+        const url = window.location.href;
+        const html = document.documentElement.innerHTML;
         
-        // Notify background script
-        notifyBackground('initialized', {
-            url: window.location.href,
-            sessionId: currentSession?.id
+        const isStripeCheckout = url.includes('checkout.stripe.com') || 
+                                 url.includes('stripe.com/pay') ||
+                                 url.includes('/checkout');
+        
+        const hasStripeElements = html.includes('stripe.com') ||
+                                  html.includes('pk_live_') ||
+                                  html.includes('pk_test_') ||
+                                  document.querySelector('[data-stripe]') !== null;
+        
+        const hasCardFields = findCardFields().number !== null;
+        
+        isCheckoutPage = isStripeCheckout || hasStripeElements || hasCardFields;
+        cardFieldsDetected = hasCardFields;
+        
+        log('Checkout detection:', { isCheckoutPage, cardFieldsDetected, url });
+        
+        return isCheckoutPage;
+    }
+
+    function findCardFields() {
+        const fields = {
+            number: null,
+            expiry: null,
+            expMonth: null,
+            expYear: null,
+            cvv: null,
+            email: null,
+            name: null
+        };
+
+        for (const [fieldType, selectors] of Object.entries(CARD_SELECTORS)) {
+            for (const selector of selectors) {
+                try {
+                    const element = document.querySelector(selector);
+                    if (element && isVisible(element)) {
+                        fields[fieldType] = element;
+                        break;
+                    }
+                } catch (e) {}
+            }
+        }
+
+        const iframes = document.querySelectorAll('iframe');
+        iframes.forEach(iframe => {
+            try {
+                if (iframe.src?.includes('stripe.com') || iframe.name?.includes('stripe')) {
+                    log('Found Stripe iframe:', iframe.name || iframe.src);
+                }
+            } catch (e) {}
+        });
+
+        return fields;
+    }
+
+    function isVisible(element) {
+        if (!element) return false;
+        const style = window.getComputedStyle(element);
+        return style.display !== 'none' && 
+               style.visibility !== 'hidden' && 
+               style.opacity !== '0' &&
+               element.offsetParent !== null;
+    }
+
+    function fillCardDetails(card) {
+        log('Filling card details...', card);
+        
+        const fields = findCardFields();
+        let filled = false;
+
+        if (fields.number) {
+            simulateInput(fields.number, card.number);
+            filled = true;
+            log('Filled card number');
+        }
+
+        if (fields.expiry) {
+            const expValue = `${card.expMonth}/${card.expYear.slice(-2)}`;
+            simulateInput(fields.expiry, expValue);
+            log('Filled expiry (combined)');
+        } else {
+            if (fields.expMonth) {
+                if (fields.expMonth.tagName === 'SELECT') {
+                    selectOption(fields.expMonth, card.expMonth);
+                } else {
+                    simulateInput(fields.expMonth, card.expMonth);
+                }
+                log('Filled exp month');
+            }
+            if (fields.expYear) {
+                const year = card.expYear.length === 4 ? card.expYear : '20' + card.expYear;
+                if (fields.expYear.tagName === 'SELECT') {
+                    selectOption(fields.expYear, year);
+                } else {
+                    simulateInput(fields.expYear, year.slice(-2));
+                }
+                log('Filled exp year');
+            }
+        }
+
+        if (fields.cvv) {
+            simulateInput(fields.cvv, card.cvv);
+            filled = true;
+            log('Filled CVV');
+        }
+
+        tryFillStripeIframe(card);
+
+        return filled;
+    }
+
+    function tryFillStripeIframe(card) {
+        const iframes = document.querySelectorAll('iframe[name*="stripe"], iframe[src*="stripe"]');
+        
+        iframes.forEach(iframe => {
+            try {
+                const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+                if (iframeDoc) {
+                    const inputs = iframeDoc.querySelectorAll('input');
+                    inputs.forEach(input => {
+                        const name = input.name?.toLowerCase() || '';
+                        const placeholder = input.placeholder?.toLowerCase() || '';
+                        
+                        if (name.includes('cardnumber') || placeholder.includes('card number')) {
+                            simulateInput(input, card.number);
+                        } else if (name.includes('exp') || placeholder.includes('mm')) {
+                            simulateInput(input, `${card.expMonth}/${card.expYear.slice(-2)}`);
+                        } else if (name.includes('cvc') || placeholder.includes('cvc')) {
+                            simulateInput(input, card.cvv);
+                        }
+                    });
+                }
+            } catch (e) {
+                log('Cannot access iframe (cross-origin)');
+            }
         });
     }
 
-    /**
-     * Extract checkout information from page
-     */
+    function simulateInput(element, value) {
+        if (!element) return;
+        
+        element.focus();
+        
+        element.dispatchEvent(new Event('focus', { bubbles: true }));
+        
+        element.value = '';
+        element.dispatchEvent(new Event('input', { bubbles: true }));
+        
+        for (let i = 0; i < value.length; i++) {
+            const char = value[i];
+            
+            element.value += char;
+            
+            element.dispatchEvent(new KeyboardEvent('keydown', { 
+                key: char, 
+                code: `Key${char.toUpperCase()}`,
+                bubbles: true 
+            }));
+            element.dispatchEvent(new KeyboardEvent('keypress', { 
+                key: char,
+                bubbles: true 
+            }));
+            element.dispatchEvent(new Event('input', { bubbles: true }));
+            element.dispatchEvent(new KeyboardEvent('keyup', { 
+                key: char,
+                bubbles: true 
+            }));
+        }
+        
+        element.dispatchEvent(new Event('change', { bubbles: true }));
+        element.dispatchEvent(new Event('blur', { bubbles: true }));
+    }
+
+    function selectOption(selectElement, value) {
+        const options = selectElement.options;
+        for (let i = 0; i < options.length; i++) {
+            if (options[i].value === value || 
+                options[i].text === value ||
+                options[i].value.includes(value) ||
+                options[i].text.includes(value)) {
+                selectElement.selectedIndex = i;
+                selectElement.dispatchEvent(new Event('change', { bubbles: true }));
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function clickSubmit() {
+        const submitSelectors = [
+            'button[type="submit"]',
+            '.SubmitButton',
+            '[data-testid="hosted-payment-submit-button"]',
+            'button[class*="submit" i]',
+            'button[class*="pay" i]',
+            'input[type="submit"]',
+            'button:contains("Pay")',
+            'button:contains("Subscribe")',
+            'button:contains("Complete")',
+            '.btn-primary[type="submit"]'
+        ];
+
+        for (const selector of submitSelectors) {
+            try {
+                const button = document.querySelector(selector);
+                if (button && isVisible(button) && !button.disabled) {
+                    log('Clicking submit button:', selector);
+                    button.click();
+                    return true;
+                }
+            } catch (e) {}
+        }
+
+        const buttons = document.querySelectorAll('button');
+        for (const button of buttons) {
+            const text = button.textContent?.toLowerCase() || '';
+            if ((text.includes('pay') || text.includes('submit') || text.includes('subscribe') || text.includes('complete')) &&
+                isVisible(button) && !button.disabled) {
+                log('Clicking button by text:', text);
+                button.click();
+                return true;
+            }
+        }
+
+        log('Submit button not found');
+        return false;
+    }
+
     function extractCheckoutInfo() {
         const info = {
             url: window.location.href,
@@ -133,189 +336,80 @@
             customerEmail: null
         };
 
-        // Extract session ID from URL
         const sessionMatch = window.location.href.match(/cs_[a-zA-Z0-9_]+/);
         if (sessionMatch) {
             info.sessionId = sessionMatch[0];
         }
 
-        // Extract from page content
         const html = document.documentElement.innerHTML;
 
-        // Public key
-        const pkMatch = html.match(/pk_live_[a-zA-Z0-9]+/);
+        const pkMatch = html.match(/pk_live_[a-zA-Z0-9]+/) || html.match(/pk_test_[a-zA-Z0-9]+/);
         if (pkMatch) {
             info.publicKey = pkMatch[0];
         }
 
-        // Amount
-        const amountElement = document.querySelector('[data-testid="total-amount"], .CheckoutPaymentForm-total, .total-amount');
-        if (amountElement) {
-            info.amount = amountElement.textContent;
+        const amountSelectors = [
+            '[data-testid="total-amount"]',
+            '.CheckoutPaymentForm-total',
+            '.total-amount',
+            '.amount',
+            '[class*="total" i]',
+            '[class*="price" i]'
+        ];
+        
+        for (const selector of amountSelectors) {
+            const el = document.querySelector(selector);
+            if (el) {
+                info.amount = el.textContent?.trim();
+                break;
+            }
         }
 
-        // Merchant name
-        const merchantElement = document.querySelector('[data-testid="merchant-name"], .merchant-name, .Header-businessName');
-        if (merchantElement) {
-            info.merchantName = merchantElement.textContent;
+        const merchantSelectors = [
+            '[data-testid="merchant-name"]',
+            '.merchant-name',
+            '.Header-businessName',
+            '[class*="merchant" i]',
+            '[class*="business" i]'
+        ];
+        
+        for (const selector of merchantSelectors) {
+            const el = document.querySelector(selector);
+            if (el) {
+                info.merchantName = el.textContent?.trim();
+                break;
+            }
         }
 
-        // Product name
-        const productElement = document.querySelector('[data-testid="product-name"], .product-name, .LineItem-name');
-        if (productElement) {
-            info.productName = productElement.textContent;
-        }
-
-        // Email
-        const emailInput = document.querySelector('input[type="email"], input[name="email"]');
+        const emailInput = document.querySelector('input[type="email"]');
         if (emailInput) {
             info.customerEmail = emailInput.value;
         }
 
-        log('Extracted checkout info:', info);
         return info;
     }
 
-    /**
-     * Fill card details into form
-     */
-    function fillCardDetails(card) {
-        log('Filling card details...');
-
-        const parsedCard = typeof card === 'string' ? parseCardString(card) : card;
-        if (!parsedCard) {
-            log('Invalid card format');
-            return false;
-        }
-
-        // Find and fill card number
-        const cardNumberInput = document.querySelector(
-            'input[name="cardNumber"], input[data-elements-stable-field-name="cardNumber"], input[autocomplete="cc-number"]'
-        );
-        if (cardNumberInput) {
-            simulateInput(cardNumberInput, parsedCard.number);
-        }
-
-        // Find and fill expiry
-        const expiryInput = document.querySelector(
-            'input[name="cardExpiry"], input[data-elements-stable-field-name="cardExpiry"], input[autocomplete="cc-exp"]'
-        );
-        if (expiryInput) {
-            simulateInput(expiryInput, `${parsedCard.expMonth}/${parsedCard.expYear.slice(-2)}`);
-        }
-
-        // Find and fill CVV
-        const cvvInput = document.querySelector(
-            'input[name="cardCvc"], input[data-elements-stable-field-name="cardCvc"], input[autocomplete="cc-csc"]'
-        );
-        if (cvvInput) {
-            simulateInput(cvvInput, parsedCard.cvv);
-        }
-
-        log('Card details filled');
-        return true;
-    }
-
-    /**
-     * Parse card string
-     */
-    function parseCardString(cardString) {
-        const parts = cardString.replace(/[\s\-]/g, '').split('|');
-        
-        if (parts.length >= 4) {
-            let expMonth = parts[1];
-            let expYear = parts[2];
-            
-            if (expYear.length === 2) {
-                expYear = '20' + expYear;
-            }
-
-            return {
-                number: parts[0],
-                expMonth: expMonth.padStart(2, '0'),
-                expYear: expYear,
-                cvv: parts[3]
-            };
-        }
-
-        return null;
-    }
-
-    /**
-     * Simulate human-like input
-     */
-    function simulateInput(element, value) {
-        element.focus();
-        
-        // Clear existing value
-        element.value = '';
-        element.dispatchEvent(new Event('input', { bubbles: true }));
-
-        // Type each character with delay
-        let index = 0;
-        const typeChar = () => {
-            if (index < value.length) {
-                element.value += value[index];
-                element.dispatchEvent(new Event('input', { bubbles: true }));
-                element.dispatchEvent(new KeyboardEvent('keydown', { key: value[index] }));
-                element.dispatchEvent(new KeyboardEvent('keyup', { key: value[index] }));
-                index++;
-                setTimeout(typeChar, Math.random() * 50 + 30);
-            } else {
-                element.dispatchEvent(new Event('change', { bubbles: true }));
-                element.blur();
-            }
-        };
-
-        typeChar();
-    }
-
-    /**
-     * Click submit button
-     */
-    function clickSubmit() {
-        const submitButton = document.querySelector(
-            'button[type="submit"], .SubmitButton, [data-testid="hosted-payment-submit-button"]'
-        );
-        
-        if (submitButton) {
-            log('Clicking submit button...');
-            submitButton.click();
-            return true;
-        }
-
-        log('Submit button not found');
-        return false;
-    }
-
-    /**
-     * Monitor for responses
-     */
     function setupResponseMonitor() {
-        // Intercept fetch
         const originalFetch = window.fetch;
         window.fetch = async function(...args) {
             const response = await originalFetch.apply(this, args);
-            
-            // Clone response to read body
             const clone = response.clone();
             
             try {
                 const url = args[0]?.url || args[0];
-                
-                if (url.includes('stripe.com')) {
+                if (typeof url === 'string' && url.includes('stripe.com')) {
                     const data = await clone.json();
-                    handleStripeResponse(url, data);
+                    handleStripeResponse(url, data, response.status);
                 }
             } catch (e) {}
 
             return response;
         };
 
-        // Intercept XMLHttpRequest
         const originalXHR = XMLHttpRequest.prototype.open;
         XMLHttpRequest.prototype.open = function(method, url) {
             this._url = url;
+            this._method = method;
             return originalXHR.apply(this, arguments);
         };
 
@@ -325,7 +419,7 @@
                 if (this._url?.includes('stripe.com')) {
                     try {
                         const data = JSON.parse(this.responseText);
-                        handleStripeResponse(this._url, data);
+                        handleStripeResponse(this._url, data, this.status);
                     } catch (e) {}
                 }
             });
@@ -335,180 +429,57 @@
         log('Response monitor setup complete');
     }
 
-    /**
-     * Handle Stripe API responses
-     */
-    function handleStripeResponse(url, data) {
-        log('Stripe response:', url);
+    function handleStripeResponse(url, data, status) {
+        log('Stripe response:', url, status);
 
-        // Log to session
-        if (sessionManager && currentSession) {
-            sessionManager.logResponse(currentSession.id, {
-                url: url,
-                status: 200,
-                body: data
-            });
-        }
-
-        // Check for captcha requirement
-        if (captchaSolver) {
-            const challenge = captchaSolver.parseCaptchaChallenge(data);
-            if (challenge) {
-                log('Captcha required!');
-                handleCaptcha(challenge);
-            }
-        }
-
-        // Check for 3DS requirement
-        if (threeDSHandler) {
-            if (threeDSHandler.requires3DS(data)) {
-                log('3DS required!');
-                const challenge = threeDSHandler.extract3DSChallenge(data);
-                if (challenge) {
-                    handle3DS(challenge);
-                }
-            }
-        }
-
-        // Check for success
-        if (data.payment_intent?.status === 'succeeded' || data.status === 'complete') {
-            log('Payment succeeded!');
-            handleSuccess(data);
-        }
-
-        // Check for decline
-        if (data.error?.code === 'card_declined') {
-            log('Card declined:', data.error.decline_code);
-            handleDecline(data);
-        }
-
-        // Notify background
-        notifyBackground('response', {
+        const result = {
             url: url,
-            data: data
-        });
+            status: status,
+            success: false,
+            error: null,
+            declineCode: null,
+            requires3DS: false
+        };
+
+        if (data.error) {
+            result.error = data.error.message || data.error.code;
+            result.declineCode = data.error.decline_code;
+            log('Error response:', result.error, result.declineCode);
+        }
+
+        if (data.payment_intent?.status === 'succeeded' || 
+            data.status === 'complete' ||
+            data.status === 'succeeded') {
+            result.success = true;
+            result.status = 'live';
+            log('Payment succeeded!');
+            showNotification('Payment Successful!', 'success');
+        }
+
+        if (data.error?.code === 'card_declined' || 
+            data.error?.type === 'card_error') {
+            result.status = 'dead';
+            log('Card declined:', result.declineCode);
+            showNotification(`Declined: ${result.declineCode || result.error}`, 'error');
+        }
+
+        if (data.payment_intent?.status === 'requires_action' ||
+            data.next_action?.type === 'use_stripe_sdk' ||
+            data.next_action?.type === 'redirect_to_url') {
+            result.requires3DS = true;
+            log('3DS required');
+            showNotification('3DS Verification Required', 'warning');
+        }
+
+        notifyPopup('cardResult', { result });
     }
 
-    /**
-     * Handle captcha challenge
-     */
-    async function handleCaptcha(challenge) {
-        log('Handling captcha...');
-
-        if (sessionManager && currentSession) {
-            sessionManager.updateState(currentSession.id, {
-                requiresCaptcha: true,
-                step: 'captcha'
-            });
-        }
-
-        const result = await captchaSolver.solve(challenge);
-        
-        if (result.success) {
-            log('Captcha solved!');
-            
-            // Submit verification
-            const verifyResult = await captchaSolver.submitVerification(
-                result.token,
-                challenge.verificationUrl
-            );
-
-            if (verifyResult.success) {
-                log('Captcha verification successful');
-            }
-        } else {
-            log('Captcha solve failed:', result.error);
-        }
-
-        notifyBackground('captcha', {
-            challenge: challenge,
-            result: result
-        });
-    }
-
-    /**
-     * Handle 3DS challenge
-     */
-    async function handle3DS(challenge) {
-        log('Handling 3DS...');
-
-        if (sessionManager && currentSession) {
-            sessionManager.updateState(currentSession.id, {
-                requires3DS: true,
-                step: '3ds'
-            });
-        }
-
-        const result = await threeDSHandler.handle3DS(challenge);
-        
-        if (result.success) {
-            log('3DS completed successfully');
-            
-            // Complete payment
-            if (challenge.paymentIntentClientSecret) {
-                await threeDSHandler.complete3DS(
-                    challenge.paymentIntentId,
-                    challenge.paymentIntentClientSecret
-                );
-            }
-        } else {
-            log('3DS failed:', result.error);
-        }
-
-        notifyBackground('3ds', {
-            challenge: challenge,
-            result: result
-        });
-    }
-
-    /**
-     * Handle payment success
-     */
-    function handleSuccess(data) {
-        log('Payment successful!');
-
-        if (sessionManager && currentSession) {
-            sessionManager.updateState(currentSession.id, {
-                step: 'completed'
-            });
-            sessionManager.endSession(currentSession.id, 'completed');
-        }
-
-        notifyBackground('success', {
-            paymentIntent: data.payment_intent,
-            status: data.status
-        });
-
-        // Show success notification
-        showNotification('Payment Successful!', 'success');
-    }
-
-    /**
-     * Handle payment decline
-     */
-    function handleDecline(data) {
-        log('Payment declined:', data.error);
-
-        if (sessionManager && currentSession) {
-            sessionManager.updateState(currentSession.id, {
-                step: 'declined',
-                lastError: data.error
-            });
-        }
-
-        notifyBackground('decline', {
-            error: data.error
-        });
-
-        // Show decline notification
-        showNotification(`Declined: ${data.error.decline_code || data.error.message}`, 'error');
-    }
-
-    /**
-     * Show notification
-     */
     function showNotification(message, type = 'info') {
+        const existing = document.querySelector('.stripe-toolkit-notification');
+        if (existing) existing.remove();
+
         const notification = document.createElement('div');
+        notification.className = `stripe-toolkit-notification ${type}`;
         notification.style.cssText = `
             position: fixed;
             top: 20px;
@@ -521,165 +492,171 @@
             z-index: 999999;
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
             animation: slideIn 0.3s ease;
-            background: ${type === 'success' ? '#22c55e' : type === 'error' ? '#ef4444' : '#3b82f6'};
+            background: ${type === 'success' ? '#22c55e' : type === 'error' ? '#ef4444' : type === 'warning' ? '#f59e0b' : '#3b82f6'};
         `;
         notification.textContent = message;
 
-        // Add animation
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes slideIn {
-                from { transform: translateX(100%); opacity: 0; }
-                to { transform: translateX(0); opacity: 1; }
-            }
-        `;
-        document.head.appendChild(style);
-
         document.body.appendChild(notification);
 
-        // Remove after 5 seconds
         setTimeout(() => {
-            notification.style.animation = 'slideIn 0.3s ease reverse';
+            notification.style.opacity = '0';
+            notification.style.transform = 'translateX(100%)';
             setTimeout(() => notification.remove(), 300);
-        }, 5000);
+        }, 4000);
     }
 
-    /**
-     * Notify background script
-     */
-    function notifyBackground(type, data) {
+    function notifyPopup(type, data) {
         try {
             chrome.runtime.sendMessage({
                 type: type,
-                data: data,
+                ...data,
                 url: window.location.href,
                 timestamp: Date.now()
             });
-        } catch (e) {
-            // Extension context may not be available
+        } catch (e) {}
+    }
+
+    function initializeModules() {
+        log('Initializing Stripe Toolkit...');
+
+        if (typeof BrowserFingerprint !== 'undefined') {
+            fingerprint = new BrowserFingerprint();
+            fingerprint.generateFingerprint();
+            if (config.autoApplyFingerprint) {
+                fingerprint.applyFingerprint();
+            }
+            log('Fingerprint module initialized');
+        }
+
+        if (typeof AntiBotHeaders !== 'undefined') {
+            antiBot = new AntiBotHeaders({ verbose: config.verbose });
+            if (config.autoApplyAntiBot) {
+                antiBot.applyAntiBotMeasures();
+            }
+            log('Anti-bot module initialized');
+        }
+
+        if (typeof SessionManager !== 'undefined') {
+            sessionManager = new SessionManager();
+            currentSession = sessionManager.getOrCreateSession(window.location.href);
+            log('Session manager initialized');
+        }
+
+        if (typeof CaptchaSolver !== 'undefined') {
+            captchaSolver = new CaptchaSolver({ verbose: config.verbose });
+            log('Captcha solver initialized');
+        }
+
+        if (typeof ThreeDSHandler !== 'undefined') {
+            threeDSHandler = new ThreeDSHandler({ verbose: config.verbose });
+            log('3DS handler initialized');
+        }
+
+        if (typeof PaymentHandler !== 'undefined') {
+            paymentHandler = new PaymentHandler({ verbose: config.verbose });
+            log('Payment handler initialized');
+        }
+
+        log('All modules initialized');
+    }
+
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        log('Received message:', message.action);
+
+        switch (message.action) {
+            case 'getInfo':
+                sendResponse(extractCheckoutInfo());
+                break;
+
+            case 'fillCard':
+                const filled = fillCardDetails(message.card);
+                sendResponse({ success: filled });
+                break;
+
+            case 'submit':
+                const submitted = clickSubmit();
+                sendResponse({ success: submitted });
+                break;
+
+            case 'getSession':
+                sendResponse(currentSession);
+                break;
+
+            case 'getFingerprint':
+                sendResponse(fingerprint?.getFingerprint?.() || null);
+                break;
+
+            case 'getHeaders':
+                sendResponse(antiBot?.getHeaders?.() || null);
+                break;
+
+            case 'getCookies':
+                sendResponse(antiBot?.getCookies?.() || null);
+                break;
+
+            case 'isCheckoutPage':
+                sendResponse({ isCheckout: detectCheckoutPage() });
+                break;
+
+            case 'getCardFields':
+                const fields = findCardFields();
+                sendResponse({
+                    hasFields: fields.number !== null || fields.cvv !== null,
+                    fields: Object.keys(fields).filter(k => fields[k] !== null)
+                });
+                break;
+
+            default:
+                sendResponse({ error: 'Unknown action' });
+        }
+
+        return true;
+    });
+
+    function init() {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', onReady);
+        } else {
+            onReady();
         }
     }
 
-    /**
-     * Listen for messages from popup/background
-     */
-    function setupMessageListener() {
-        chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-            log('Received message:', message.action);
+    function onReady() {
+        initializeModules();
+        setupResponseMonitor();
+        
+        if (detectCheckoutPage()) {
+            log('Checkout page detected!');
+            notifyPopup('checkoutDetected', { 
+                info: extractCheckoutInfo(),
+                hasCardFields: cardFieldsDetected
+            });
+        }
 
-            switch (message.action) {
-                case 'getInfo':
-                    sendResponse(extractCheckoutInfo());
-                    break;
-
-                case 'fillCard':
-                    const filled = fillCardDetails(message.card);
-                    sendResponse({ success: filled });
-                    break;
-
-                case 'submit':
-                    const submitted = clickSubmit();
-                    sendResponse({ success: submitted });
-                    break;
-
-                case 'getSession':
-                    sendResponse(currentSession);
-                    break;
-
-                case 'getFingerprint':
-                    sendResponse(fingerprint?.getFingerprint());
-                    break;
-
-                case 'getHeaders':
-                    sendResponse(antiBot?.getHeaders());
-                    break;
-
-                case 'getCookies':
-                    sendResponse(antiBot?.getCookies());
-                    break;
-
-                case 'processCheckout':
-                    processFullCheckout(message.card, message.billing)
-                        .then(result => sendResponse(result));
-                    return true; // Keep channel open for async response
-
-                default:
-                    sendResponse({ error: 'Unknown action' });
+        const observer = new MutationObserver(() => {
+            if (!cardFieldsDetected && detectCheckoutPage()) {
+                log('Card fields appeared');
+                notifyPopup('checkoutDetected', { 
+                    info: extractCheckoutInfo(),
+                    hasCardFields: cardFieldsDetected
+                });
             }
+        });
+
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
         });
     }
 
-    /**
-     * Process full checkout
-     */
-    async function processFullCheckout(card, billing = {}) {
-        log('Processing full checkout...');
-
-        if (!paymentHandler) {
-            return { success: false, error: 'Payment handler not initialized' };
-        }
-
-        // Initialize payment handler
-        await paymentHandler.initialize(window.location.href);
-
-        // Process checkout
-        const result = await paymentHandler.processCheckout(card, billing);
-
-        // Handle 3DS if required
-        if (result.requires3DS && threeDSHandler) {
-            const challenge = threeDSHandler.extract3DSChallenge(result);
-            if (challenge) {
-                const threeDSResult = await threeDSHandler.handle3DS(challenge);
-                return threeDSResult;
-            }
-        }
-
-        return result;
-    }
-
-    /**
-     * Log message
-     */
-    function log(...args) {
-        if (config.verbose) {
-            console.log('[STRIPE-TOOLKIT]', ...args);
-        }
-    }
-
-    /**
-     * Initialize on page load
-     */
-    function init() {
-        // Wait for page to be ready
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => {
-                initializeModules();
-                setupResponseMonitor();
-                setupMessageListener();
-            });
-        } else {
-            initializeModules();
-            setupResponseMonitor();
-            setupMessageListener();
-        }
-    }
-
-    // Start initialization
     init();
 
-    // Expose API for debugging
     window.StripeToolkit = {
-        fingerprint: () => fingerprint,
-        antiBot: () => antiBot,
-        session: () => sessionManager,
-        captcha: () => captchaSolver,
-        threeds: () => threeDSHandler,
-        payment: () => paymentHandler,
-        currentSession: () => currentSession,
-        extractInfo: extractCheckoutInfo,
         fillCard: fillCardDetails,
         submit: clickSubmit,
-        processCheckout: processFullCheckout
+        getInfo: extractCheckoutInfo,
+        findFields: findCardFields,
+        isCheckout: () => isCheckoutPage
     };
 
 })();
