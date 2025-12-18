@@ -170,6 +170,14 @@
     function fillCardDetails(card) {
         log('Filling card details...', card);
         
+        // Update API interceptor with current card
+        currentCard = card;
+        window.postMessage({
+            type: 'updateCurrentCard',
+            card: card
+        }, '*');
+        log('[API] Notified interceptor of card update');
+        
         const fields = findCardFields();
         let filled = false;
 
@@ -728,6 +736,16 @@
         log('All modules initialized');
     }
 
+    // Listen for API interceptor responses from MAIN world
+    window.addEventListener('message', (event) => {
+        if (event.source !== window) return;
+        
+        if (event.data.type === 'STRIPE_API_RESPONSE') {
+            console.log('[CONTENT] Received API response from interceptor:', event.data);
+            handleStripeResponse(event.data.url, event.data.data, event.data.status);
+        }
+    });
+    
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         log('Received message:', message.action);
 

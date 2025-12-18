@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Stripe Toolkit",
-  "version": "4.0.0",
+  "version": "5.0.0",
   "description": "Advanced Stripe Checkout automation toolkit with auto-captcha click, result capture, proxy support, and session management",
   "author": "Strip Developer",
   "permissions": [
@@ -35,6 +35,22 @@
     "service_worker": "js/background.js"
   },
   "content_scripts": [
+    {
+      "matches": [
+        "*://*/*cs_live_*",
+        "*://*/*cs_test_*",
+        "https://checkout.stripe.com/*",
+        "https://buy.stripe.com/*",
+        "https://*.stripe.com/*",
+        "*://*/*checkout/*",
+        "*://invoice.stripe.com/*",
+        "*://billing.stripe.com/*"
+      ],
+      "js": ["js/api-interceptor.js"],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": true
+    },
     {
       "matches": [
         "*://*/*cs_live_*",
