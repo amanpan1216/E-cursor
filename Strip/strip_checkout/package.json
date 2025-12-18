@@ -1,0 +1,37 @@
+{
+  "name": "stripe-hitter",
+  "version": "1.0.0",
+  "description": "Payment Hitter for Stripe - Created by @LEGEND_BL",
+  "main": "proxy-server.js",
+  "scripts": {
+    "start": "node proxy-server.js",
+    "dev": "node proxy-server.js",
+    "test": "node test-improvements.js"
+  },
+  "keywords": [
+    "stripe",
+    "payment",
+    "gateway",
+    "automation",
+    "hitter",
+    "bypasser",
+    "3ds bypass",
+    "checkout",
+    "cards",
+    "void"
+  ],
+  "author": "@LEGENDBL",
+  "license": "MIT",
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "dependencies": {},
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "bugs": {
+    "url": "/issues"
+  },
+  "homepage": "#readme"
+}

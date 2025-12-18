@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  void-payment:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - DEBUG_MODE=false
+      - USE_API_KEY=false
+      - API_KEY=your-secret-key
+      - MAX_WORKERS=3
+    restart: unless-stopped
