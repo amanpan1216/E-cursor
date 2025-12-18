@@ -1,0 +1,235 @@
+/* Checkout and Card Log Styles */
+
+.logs-container-wrapper {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    border: 1px solid rgba(99, 91, 255, 0.3);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.logs-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    background: rgba(0, 0, 0, 0.3);
+    border-bottom: 1px solid rgba(99, 91, 255, 0.2);
+}
+
+.logs-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 16px;
+    font-weight: 600;
+    color: #a5a5ff;
+}
+
+.logs-title i {
+    font-size: 18px;
+}
+
+.logs-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.copy-btn, .clear-btn {
+    padding: 6px 12px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.copy-btn {
+    background: #635bff;
+    color: white;
+}
+
+.clear-btn {
+    background: #ef4444;
+    color: white;
+}
+
+.copy-btn:hover, .clear-btn:hover {
+    opacity: 0.9;
+    transform: scale(1.05);
+}
+
+.logs-container {
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 15px;
+}
+
+.logs-container::-webkit-scrollbar {
+    width: 8px;
+}
+
+.logs-container::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+}
+
+.logs-container::-webkit-scrollbar-thumb {
+    background: rgba(99, 91, 255, 0.5);
+    border-radius: 4px;
+}
+
+.logs-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(99, 91, 255, 0.7);
+}
+
+.empty-logs {
+    text-align: center;
+    padding: 40px 20px;
+    color: #6b7280;
+    font-size: 14px;
+}
+
+/* Checkout Log Item */
+.checkout-log-item {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(99, 91, 255, 0.2);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 10px;
+    transition: all 0.2s;
+}
+
+.checkout-log-item:hover {
+    border-color: rgba(99, 91, 255, 0.5);
+    transform: translateY(-2px);
+}
+
+.checkout-log-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.checkout-log-merchant {
+    font-size: 14px;
+    font-weight: 600;
+    color: #22c55e;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.checkout-log-time {
+    font-size: 11px;
+    color: #9ca3af;
+}
+
+.checkout-log-details {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.checkout-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.detail-label {
+    font-size: 10px;
+    color: #6b7280;
+    text-transform: uppercase;
+}
+
+.detail-value {
+    font-size: 12px;
+    color: #e0e0e0;
+    font-weight: 500;
+}
+
+.session-id, .url-text {
+    font-family: monospace;
+    font-size: 11px;
+    word-break: break-all;
+}
+
+/* Card Log Item */
+.card-log-item {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(99, 91, 255, 0.2);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 10px;
+    transition: all 0.2s;
+}
+
+.card-log-item:hover {
+    transform: translateY(-2px);
+}
+
+.card-log-item.live {
+    border-left: 3px solid #22c55e;
+}
+
+.card-log-item.dead {
+    border-left: 3px solid #ef4444;
+}
+
+.card-log-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.card-log-card {
+    font-size: 13px;
+    font-weight: 600;
+    color: #e0e0e0;
+    font-family: monospace;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.card-log-status {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.card-log-status.live {
+    background: rgba(34, 197, 94, 0.2);
+    color: #22c55e;
+}
+
+.card-log-status.dead {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+}
+
+.card-log-details {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.card-detail {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+}
+
+.error-text {
+    color: #f59e0b;
+    font-weight: 500;
+}
