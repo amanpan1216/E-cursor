@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "proxy-server.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "proxy-server.js"
+    }
+  ],
+  "env": {
+    "PORT": "8080",
+    "DEBUG_MODE": "false",
+    "USE_API_KEY": "false",
+    "MAX_WORKERS": "3"
+  }
+}
