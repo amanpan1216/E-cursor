@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Stripe Toolkit",
-  "version": "3.0.0",
+  "version": "2.0.0",
   "description": "Advanced Stripe Checkout automation toolkit with fingerprinting, anti-bot bypass, card management, and session persistence",
   "author": "Strip Developer",
   "permissions": [
@@ -12,9 +12,7 @@
     "tabs",
     "clipboardRead",
     "clipboardWrite",
-    "notifications",
-    "webRequest",
-    "webNavigation"
+    "notifications"
   ],
   "host_permissions": [
     "https://checkout.stripe.com/*",

@@ -1,123 +1,171 @@
-// Stripe Toolkit v3.0 - Background Service Worker
+let settings = {
+    autoDetect: true,
+    autoFill: false,
+    autoSubmit: false,
+    fillDelay: 500,
+    captchaApiKey: '',
+    captchaService: 'internal',
+    proxyEnabled: false,
+    proxyList: [],
+    verbose: true,
+    soundAlerts: false
+};
 
 chrome.runtime.onInstalled.addListener((details) => {
+    console.log('[BACKGROUND] Stripe Toolkit installed', details.reason);
+    
+    // Open settings page on install
     if (details.reason === 'install') {
-        chrome.runtime.openOptionsPage();
-        
-        chrome.storage.local.set({
-            settings: {
-                autoDetect: true,
-                autoFill: false,
-                autoSubmit: false,
-                autoNext: false,
-                fillDelay: 500,
-                captchaService: 'internal',
-                captchaApiKey: '',
-                proxyEnabled: false,
-                soundAlerts: false,
-                verbose: true,
-                billingName: '',
-                billingEmail: '',
-                billingAddress: '',
-                billingCity: '',
-                billingZip: ''
-            },
-            cards: [],
-            currentCardIndex: 0,
-            liveCards: [],
-            deadCards: []
-        });
+        chrome.tabs.create({ url: chrome.runtime.getURL('pages/settings.html') });
     }
+    
+    chrome.storage.local.get(['settings', 'cards', 'liveCards', 'deadCards'], (data) => {
+        if (data.settings) settings = { ...settings, ...data.settings };
+    });
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    const tabId = sender.tab?.id;
+    
     switch (message.type) {
         case 'checkoutDetected':
-            handleCheckoutDetected(message);
+            handleCheckoutDetected(tabId, message);
             break;
+            
         case 'cardResult':
-            handleCardResult(message.result);
+            handleCardResult(tabId, message.result);
             break;
-        case 'nextCard':
-            handleNextCard();
+            
+        case 'getSettings':
+            sendResponse(settings);
             break;
-        case 'startChecking':
-            chrome.action.setBadgeText({ text: '...' });
-            chrome.action.setBadgeBackgroundColor({ color: '#f39c12' });
+            
+        case 'settingsUpdated':
+            settings = { ...settings, ...message.settings };
             break;
-        case 'stopChecking':
-            chrome.action.setBadgeText({ text: '' });
+            
+        case 'openSettings':
+            chrome.tabs.create({ url: chrome.runtime.getURL('pages/settings.html') });
             break;
+            
+        case 'getCards':
+            chrome.storage.local.get(['cards'], (data) => {
+                sendResponse(data.cards || []);
+            });
+            return true;
+            
+        case 'saveCards':
+            chrome.storage.local.set({ cards: message.cards });
+            sendResponse({ success: true });
+            break;
+            
+        case 'getLiveCards':
+            chrome.storage.local.get(['liveCards'], (data) => {
+                sendResponse(data.liveCards || []);
+            });
+            return true;
+            
+        case 'getDeadCards':
+            chrome.storage.local.get(['deadCards'], (data) => {
+                sendResponse(data.deadCards || []);
+            });
+            return true;
+            
+        default:
+            console.log('[BACKGROUND] Unknown message:', message.type);
     }
+    
     return true;
 });
 
-async function handleCheckoutDetected(data) {
-    chrome.notifications.create({
-        type: 'basic',
-        iconUrl: '../icons/icon128.png',
-        title: 'Stripe Toolkit',
-        message: 'Checkout page detected!'
-    });
+function handleCheckoutDetected(tabId, message) {
+    console.log('[BACKGROUND] Checkout detected:', tabId, message.info?.url);
     
-    chrome.action.setBadgeText({ text: 'ON' });
-    chrome.action.setBadgeBackgroundColor({ color: '#4ecca3' });
-}
-
-async function handleCardResult(result) {
-    const data = await chrome.storage.local.get(['cards', 'currentCardIndex', 'liveCards', 'deadCards']);
-    const cards = data.cards || [];
-    const currentIndex = data.currentCardIndex || 0;
-    let liveCards = data.liveCards || [];
-    let deadCards = data.deadCards || [];
+    chrome.action.setBadgeText({ text: 'ON', tabId: tabId });
+    chrome.action.setBadgeBackgroundColor({ color: '#22c55e', tabId: tabId });
     
-    if (currentIndex < cards.length) {
-        const card = cards[currentIndex];
-        card.timestamp = Date.now();
-        
-        if (result.success || result.status === 'live') {
-            card.status = 'live';
-            liveCards.push({ ...card });
+    if (settings.autoFill) {
+        chrome.storage.local.get(['cards', 'currentCardIndex'], (data) => {
+            const cards = data.cards || [];
+            const index = data.currentCardIndex || 0;
             
-            chrome.notifications.create({
-                type: 'basic',
-                iconUrl: '../icons/icon128.png',
-                title: '✓ LIVE CARD!',
-                message: `${card.number.slice(0,4)}****${card.number.slice(-4)}`
-            });
-        } else {
-            card.status = 'dead';
-            card.error = result.error || 'Declined';
-            deadCards.push({ ...card });
-        }
-        
-        cards[currentIndex] = card;
-        await chrome.storage.local.set({ cards, liveCards, deadCards });
+            if (cards.length > 0 && cards[index]) {
+                setTimeout(() => {
+                    chrome.tabs.sendMessage(tabId, {
+                        action: 'fillCard',
+                        card: cards[index]
+                    });
+                }, settings.fillDelay);
+            }
+        });
     }
 }
 
-async function handleNextCard() {
-    const data = await chrome.storage.local.get(['cards', 'currentCardIndex']);
-    let currentIndex = data.currentCardIndex || 0;
+function handleCardResult(tabId, result) {
+    console.log('[BACKGROUND] Card result:', result);
     
-    if (currentIndex < (data.cards || []).length - 1) {
-        currentIndex++;
-        await chrome.storage.local.set({ currentCardIndex: currentIndex });
-    } else {
-        chrome.action.setBadgeText({ text: 'END' });
-        chrome.action.setBadgeBackgroundColor({ color: '#e74c3c' });
-    }
+    chrome.storage.local.get(['cards', 'currentCardIndex', 'liveCards', 'deadCards'], (data) => {
+        const cards = data.cards || [];
+        const index = data.currentCardIndex || 0;
+        let liveCards = data.liveCards || [];
+        let deadCards = data.deadCards || [];
+        
+        if (cards[index]) {
+            const card = cards[index];
+            card.timestamp = Date.now();
+            
+            if (result.success || result.status === 'live') {
+                card.status = 'live';
+                liveCards.push({ ...card });
+                
+                chrome.action.setBadgeText({ text: 'LIVE', tabId: tabId });
+                chrome.action.setBadgeBackgroundColor({ color: '#22c55e', tabId: tabId });
+                
+                if (settings.soundAlerts) {
+                    chrome.tabs.sendMessage(tabId, { action: 'playSound', type: 'live' });
+                }
+                
+                chrome.notifications.create({
+                    type: 'basic',
+                    iconUrl: 'icons/icon128.png',
+                    title: 'LIVE CARD!',
+                    message: `Card ending in ${card.number.slice(-4)} is LIVE!`
+                });
+            } else {
+                card.status = 'dead';
+                card.error = result.error || result.declineCode || 'Declined';
+                deadCards.push({ ...card });
+                
+                chrome.action.setBadgeText({ text: 'DEAD', tabId: tabId });
+                chrome.action.setBadgeBackgroundColor({ color: '#ef4444', tabId: tabId });
+            }
+            
+            cards[index] = card;
+            
+            chrome.storage.local.set({
+                cards: cards,
+                liveCards: liveCards,
+                deadCards: deadCards
+            });
+        }
+    });
 }
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    if (changeInfo.status === 'complete' && tab.url) {
-        if (tab.url.includes('checkout.stripe.com') || 
-            tab.url.includes('cs_live_') || 
-            tab.url.includes('cs_test_')) {
+    if (changeInfo.status === 'complete' && settings.autoDetect) {
+        const url = tab.url || '';
+        if (url.includes('checkout.stripe.com') || 
+            url.includes('stripe.com/pay') ||
+            url.includes('/checkout')) {
+            
             chrome.action.setBadgeText({ text: 'ON', tabId: tabId });
-            chrome.action.setBadgeBackgroundColor({ color: '#4ecca3', tabId: tabId });
+            chrome.action.setBadgeBackgroundColor({ color: '#22c55e', tabId: tabId });
         }
     }
 });
 
-console.log('[Stripe Toolkit] Background initialized');
+chrome.tabs.onRemoved.addListener((tabId) => {
+    console.log('[BACKGROUND] Tab closed:', tabId);
+});
+
+console.log('[BACKGROUND] Service worker started');
