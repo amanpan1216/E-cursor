@@ -543,3 +543,12 @@ function showNotification(message, type) {
         setTimeout(() => notification.remove(), 300);
     }, 3000);
 }
+
+// Open full settings page
+document.getElementById('open-settings')?.addEventListener('click', () => {
+    chrome.runtime.openOptionsPage();
+});
+
+document.getElementById('open-full-settings')?.addEventListener('click', () => {
+    chrome.runtime.openOptionsPage();
+});

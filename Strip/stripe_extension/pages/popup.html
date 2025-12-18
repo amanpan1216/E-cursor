@@ -4,90 +4,118 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Stripe Toolkit</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="../css/popup.css">
 </head>
 <body>
     <div class="container">
         <header class="header">
             <div class="logo">
-                <img src="../icons/icon32.png" alt="Logo">
+                <i class="fas fa-bolt logo-icon"></i>
                 <h1>Stripe Toolkit</h1>
             </div>
-            <div class="status" id="status">
-                <span class="status-dot"></span>
-                <span class="status-text">Ready</span>
+            <div class="header-actions">
+                <button id="open-settings" class="icon-btn" title="Full Settings">
+                    <i class="fas fa-cog"></i>
+                </button>
             </div>
         </header>
 
+        <div class="status-bar">
+            <div class="status-item">
+                <span class="status-label">Status</span>
+                <span id="checkout-status" class="status-value waiting">
+                    <i class="fas fa-circle"></i> Waiting
+                </span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Mode</span>
+                <span id="current-mode" class="status-value">Autohit</span>
+            </div>
+        </div>
+
         <nav class="tabs">
-            <button class="tab active" data-tab="cards">Cards</button>
-            <button class="tab" data-tab="checkout">Checkout</button>
-            <button class="tab" data-tab="results">Results</button>
-            <button class="tab" data-tab="settings">Settings</button>
+            <button class="tab active" data-tab="cards"><i class="fas fa-credit-card"></i> Cards</button>
+            <button class="tab" data-tab="checkout"><i class="fas fa-shopping-cart"></i> Checkout</button>
+            <button class="tab" data-tab="results"><i class="fas fa-chart-bar"></i> Results</button>
+            <button class="tab" data-tab="settings"><i class="fas fa-cog"></i> Quick</button>
         </nav>
 
         <div class="tab-content active" id="cards-tab">
-            <div class="section">
-                <h3>Add Cards</h3>
-                <div class="input-group">
-                    <label for="cards-input">Cards (one per line)</label>
-                    <textarea id="cards-input" rows="5" placeholder="4889506049068418|04|2028|219
-4339931606963411|03|2026|323
-5491700006114342|03|2026|585"></textarea>
-                    <small>Format: number|mm|yyyy|cvv or number|mm|yy|cvv</small>
+            <div class="current-card-display">
+                <div class="card-visual">
+                    <div class="card-chip"></div>
+                    <div class="card-number" id="current-card-number">•••• •••• •••• ••••</div>
+                    <div class="card-details">
+                        <div class="card-expiry">
+                            <span class="label">VALID THRU</span>
+                            <span id="current-card-exp">MM/YY</span>
+                        </div>
+                        <div class="card-cvv">
+                            <span class="label">CVV</span>
+                            <span id="current-card-cvv">•••</span>
+                        </div>
+                    </div>
                 </div>
-                <div class="button-group">
-                    <button class="btn btn-primary" id="add-cards">Add Cards</button>
-                    <button class="btn btn-secondary" id="clear-input">Clear</button>
+                <div class="card-index">
+                    Card <span id="current-index">0</span> of <span id="total-cards">0</span>
                 </div>
             </div>
 
             <div class="section">
-                <h3>Saved Cards (<span id="card-count">0</span>)</h3>
+                <div class="input-group">
+                    <textarea id="cards-input" rows="4" placeholder="Paste cards (one per line)&#10;Format: number|mm|yyyy|cvv&#10;4889506049068418|04|2028|219"></textarea>
+                </div>
+                <div class="button-group">
+                    <button class="btn btn-primary" id="add-cards"><i class="fas fa-plus"></i> Add</button>
+                    <button class="btn btn-secondary" id="clear-input"><i class="fas fa-eraser"></i> Clear</button>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="card-list-header">
+                    <span>Cards: <strong id="card-count">0</strong></span>
+                    <button class="btn btn-small btn-danger" id="clear-cards"><i class="fas fa-trash"></i></button>
+                </div>
                 <div class="card-list" id="card-list">
                     <div class="empty-state">No cards saved</div>
                 </div>
+            </div>
+
+            <div class="control-section">
                 <div class="button-group">
-                    <button class="btn btn-success" id="start-checking">Start Checking</button>
-                    <button class="btn btn-danger" id="stop-checking" disabled>Stop</button>
-                    <button class="btn btn-secondary" id="clear-cards">Clear All</button>
+                    <button class="btn btn-success full-width" id="start-checking">
+                        <i class="fas fa-play"></i> Start Checking
+                    </button>
+                </div>
+                <div class="button-group">
+                    <button class="btn btn-danger" id="stop-checking" disabled>
+                        <i class="fas fa-stop"></i> Stop
+                    </button>
+                    <button class="btn btn-primary" id="fill-current">
+                        <i class="fas fa-fill"></i> Fill
+                    </button>
+                    <button class="btn btn-secondary" id="next-card">
+                        <i class="fas fa-forward"></i> Next
+                    </button>
                 </div>
             </div>
 
-            <div class="section">
-                <h3>Current Card</h3>
-                <div class="current-card" id="current-card">
-                    <div class="card-display">
-                        <span class="card-number" id="current-card-number">---- ---- ---- ----</span>
-                        <div class="card-details">
-                            <span id="current-card-exp">--/--</span>
-                            <span id="current-card-cvv">---</span>
-                        </div>
-                    </div>
-                    <div class="card-status" id="current-card-status">Waiting...</div>
-                </div>
-                <div class="button-group">
-                    <button class="btn btn-primary" id="fill-current">Fill Current</button>
-                    <button class="btn btn-secondary" id="next-card">Next Card</button>
-                </div>
-            </div>
-
-            <div class="section">
-                <h3>Progress</h3>
+            <div class="progress-section">
                 <div class="progress-bar">
                     <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
                 </div>
                 <div class="progress-stats">
-                    <span>Checked: <strong id="checked-count">0</strong></span>
-                    <span>Live: <strong id="live-count" class="text-success">0</strong></span>
-                    <span>Dead: <strong id="dead-count" class="text-danger">0</strong></span>
+                    <span class="stat-live"><i class="fas fa-check-circle"></i> <span id="live-count">0</span></span>
+                    <span class="stat-dead"><i class="fas fa-times-circle"></i> <span id="dead-count">0</span></span>
+                    <span class="stat-pending"><i class="fas fa-clock"></i> <span id="pending-count">0</span></span>
                 </div>
             </div>
         </div>
 
         <div class="tab-content" id="checkout-tab">
             <div class="section">
-                <h3>Checkout Info</h3>
+                <h3><i class="fas fa-info-circle"></i> Checkout Info</h3>
                 <div class="info-grid" id="checkout-info">
                     <div class="info-item">
                         <label>URL</label>
@@ -106,27 +134,37 @@
                         <span id="info-merchant">-</span>
                     </div>
                 </div>
-                <button class="btn btn-secondary" id="refresh-info">Refresh Info</button>
+                <button class="btn btn-secondary" id="refresh-info"><i class="fas fa-sync"></i> Refresh</button>
             </div>
 
             <div class="section">
-                <h3>Auto-Fill Settings</h3>
-                <div class="input-group">
-                    <label class="checkbox-label">
+                <h3><i class="fas fa-robot"></i> Automation</h3>
+                <div class="toggle-group">
+                    <label class="toggle-label">
+                        <span>Auto-detect checkout</span>
                         <input type="checkbox" id="auto-detect" checked>
-                        Auto-detect checkout pages
+                        <span class="toggle-slider"></span>
                     </label>
                 </div>
-                <div class="input-group">
-                    <label class="checkbox-label">
+                <div class="toggle-group">
+                    <label class="toggle-label">
+                        <span>Auto-fill on detection</span>
                         <input type="checkbox" id="auto-fill-enabled">
-                        Auto-fill on detection
+                        <span class="toggle-slider"></span>
                     </label>
                 </div>
-                <div class="input-group">
-                    <label class="checkbox-label">
+                <div class="toggle-group">
+                    <label class="toggle-label">
+                        <span>Auto-submit after fill</span>
                         <input type="checkbox" id="auto-submit">
-                        Auto-submit after fill
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                <div class="toggle-group">
+                    <label class="toggle-label">
+                        <span>Auto-next on decline</span>
+                        <input type="checkbox" id="auto-next">
+                        <span class="toggle-slider"></span>
                     </label>
                 </div>
                 <div class="input-group">
@@ -137,7 +175,7 @@
 
             <div class="section collapsible">
                 <h3 class="collapsible-header">
-                    Billing Details
+                    <i class="fas fa-user"></i> Billing Details
                     <span class="collapse-icon">▼</span>
                 </h3>
                 <div class="collapsible-content">
@@ -163,51 +201,56 @@
                             <input type="text" id="billing-zip" placeholder="10001">
                         </div>
                     </div>
-                    <button class="btn btn-secondary" id="generate-billing">Generate Random</button>
+                    <button class="btn btn-secondary" id="generate-billing"><i class="fas fa-magic"></i> Generate</button>
                 </div>
             </div>
         </div>
 
         <div class="tab-content" id="results-tab">
             <div class="section">
-                <h3>Live Cards</h3>
+                <div class="results-header">
+                    <h3><i class="fas fa-check-circle text-success"></i> Live Cards</h3>
+                    <button class="btn btn-small" id="copy-live"><i class="fas fa-copy"></i></button>
+                </div>
                 <div class="results-list live-list" id="live-list">
                     <div class="empty-state">No live cards yet</div>
                 </div>
-                <button class="btn btn-secondary" id="copy-live">Copy All Live</button>
             </div>
 
             <div class="section">
-                <h3>Dead Cards</h3>
+                <div class="results-header">
+                    <h3><i class="fas fa-times-circle text-danger"></i> Dead Cards</h3>
+                    <button class="btn btn-small" id="copy-dead"><i class="fas fa-copy"></i></button>
+                </div>
                 <div class="results-list dead-list" id="dead-list">
                     <div class="empty-state">No dead cards yet</div>
                 </div>
-                <button class="btn btn-secondary" id="copy-dead">Copy All Dead</button>
             </div>
 
-            <div class="section">
-                <h3>Statistics</h3>
-                <div class="stats-grid">
-                    <div class="stat-item">
-                        <span class="stat-value" id="stat-total">0</span>
-                        <span class="stat-label">Total</span>
-                    </div>
-                    <div class="stat-item success">
-                        <span class="stat-value" id="stat-live">0</span>
-                        <span class="stat-label">Live</span>
-                    </div>
-                    <div class="stat-item danger">
-                        <span class="stat-value" id="stat-dead">0</span>
-                        <span class="stat-label">Dead</span>
-                    </div>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <span class="stat-value" id="stat-total">0</span>
+                    <span class="stat-label">Total</span>
                 </div>
-                <button class="btn btn-danger" id="clear-results">Clear All Results</button>
+                <div class="stat-item success">
+                    <span class="stat-value" id="stat-live">0</span>
+                    <span class="stat-label">Live</span>
+                </div>
+                <div class="stat-item danger">
+                    <span class="stat-value" id="stat-dead">0</span>
+                    <span class="stat-label">Dead</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value" id="stat-rate">0%</span>
+                    <span class="stat-label">Rate</span>
+                </div>
             </div>
+            <button class="btn btn-danger full-width" id="clear-results"><i class="fas fa-trash"></i> Clear Results</button>
         </div>
 
         <div class="tab-content" id="settings-tab">
             <div class="section">
-                <h3>Captcha Settings</h3>
+                <h3><i class="fas fa-shield-alt"></i> Captcha</h3>
                 <div class="input-group">
                     <label for="captcha-service">Service</label>
                     <select id="captcha-service">
@@ -224,40 +267,43 @@
             </div>
 
             <div class="section">
-                <h3>Proxy Settings</h3>
-                <div class="input-group">
-                    <label class="checkbox-label">
+                <h3><i class="fas fa-network-wired"></i> Proxy</h3>
+                <div class="toggle-group">
+                    <label class="toggle-label">
+                        <span>Enable Proxy</span>
                         <input type="checkbox" id="proxy-enabled">
-                        Enable Proxy
+                        <span class="toggle-slider"></span>
                     </label>
                 </div>
                 <div class="input-group">
-                    <label for="proxy-list">Proxy List (one per line)</label>
-                    <textarea id="proxy-list" rows="4" placeholder="host:port:user:pass"></textarea>
+                    <textarea id="proxy-list" rows="3" placeholder="host:port:user:pass"></textarea>
                 </div>
             </div>
 
             <div class="section">
-                <h3>General</h3>
-                <div class="input-group">
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="verbose-logging" checked>
-                        Verbose logging
+                <h3><i class="fas fa-bell"></i> Notifications</h3>
+                <div class="toggle-group">
+                    <label class="toggle-label">
+                        <span>Sound on Live</span>
+                        <input type="checkbox" id="sound-alerts">
+                        <span class="toggle-slider"></span>
                     </label>
                 </div>
-                <div class="input-group">
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="sound-alerts">
-                        Sound alerts on live
+                <div class="toggle-group">
+                    <label class="toggle-label">
+                        <span>Verbose Logging</span>
+                        <input type="checkbox" id="verbose-logging" checked>
+                        <span class="toggle-slider"></span>
                     </label>
                 </div>
             </div>
 
-            <button class="btn btn-primary" id="save-settings">Save Settings</button>
+            <button class="btn btn-primary full-width" id="save-settings"><i class="fas fa-save"></i> Save Settings</button>
+            <button class="btn btn-secondary full-width mt-10" id="open-full-settings"><i class="fas fa-external-link-alt"></i> Full Settings Dashboard</button>
         </div>
 
         <footer class="footer">
-            <span>Stripe Toolkit v1.1.0</span>
+            <span>Stripe Toolkit v2.0</span>
         </footer>
     </div>
 
